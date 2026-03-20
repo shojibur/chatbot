@@ -3,8 +3,9 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && vite build --config vite.widget.config.ts",
         "build:ssr": "vite build && vite build --ssr",
+        "build:widget": "vite build --config vite.widget.config.ts",
         "dev": "vite",
         "format": "prettier --write resources/",
         "format:check": "prettier --check resources/",

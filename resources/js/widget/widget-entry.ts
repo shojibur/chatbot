@@ -1,9 +1,13 @@
 import { createApp, h } from 'vue';
 import ChatWidget from './ChatWidget.vue';
+import widgetStyles from './widget-styles.css?inline';
 
 (function () {
   const script = document.currentScript as HTMLScriptElement | null;
-  if (!script) return;
+  if (!script) {
+    console.error('[Davey] Widget script must be loaded synchronously (not async/defer/module).');
+    return;
+  }
 
   const clientCode = script.getAttribute('data-client-code');
   if (!clientCode) {
@@ -11,21 +15,25 @@ import ChatWidget from './ChatWidget.vue';
     return;
   }
 
-  // Derive API base from the script src (same origin as the widget JS)
   const apiBase = script.getAttribute('data-api-base') || new URL(script.src).origin;
 
-  // Create a shadow DOM host for style isolation
+  // Create Shadow DOM host for full style isolation
   const host = document.createElement('div');
   host.id = 'davey-chat-widget';
   document.body.appendChild(host);
 
   const shadow = host.attachShadow({ mode: 'open' });
 
-  // Create a mount point inside shadow DOM
+  // Inject styles into Shadow DOM (not <head>)
+  const styleEl = document.createElement('style');
+  styleEl.textContent = widgetStyles;
+  shadow.appendChild(styleEl);
+
+  // Create mount point inside Shadow DOM
   const mountEl = document.createElement('div');
   shadow.appendChild(mountEl);
 
-  // Fetch widget config then mount
+  // Fetch config then mount
   fetch(`${apiBase}/api/v1/widget-config/${clientCode}`, {
     headers: { Accept: 'application/json' },
   })
