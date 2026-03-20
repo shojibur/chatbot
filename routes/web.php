@@ -3,11 +3,8 @@
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
 use Illuminate\Support\Facades\Route;
-use Laravel\Fortify\Features;
 
-Route::inertia('/', 'Welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-])->name('home');
+Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [ClientController::class, 'index'])->name('dashboard');
