@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { Building2 } from 'lucide-vue-next';
+import { Building2, LayoutDashboard } from 'lucide-vue-next';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -19,8 +19,13 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Clients',
+        title: 'Dashboard',
         href: dashboard(),
+        icon: LayoutDashboard,
+    },
+    {
+        title: 'Clients',
+        href: '/clients',
         icon: Building2,
     },
 ];
