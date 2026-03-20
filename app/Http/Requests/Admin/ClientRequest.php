@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Client;
+use App\Models\Plan;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,9 +25,19 @@ abstract class ClientRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'plan_id' => ['required', Rule::exists(Plan::class, 'id')],
             'name' => ['required', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email:rfc', 'max:255'],
             'website_url' => ['nullable', 'url:http,https', 'max:255'],
+            'business_description' => ['nullable', 'string', 'max:4000'],
+            'system_prompt' => ['nullable', 'string', 'max:4000'],
+            'chat_model' => ['required', Rule::in(Client::CHAT_MODELS)],
+            'embedding_model' => ['required', Rule::in(Client::EMBEDDING_MODELS)],
+            'retrieval_chunk_count' => ['required', 'integer', 'min:1', 'max:8'],
+            'cache_ttl_hours' => ['required', 'integer', 'min:1', 'max:720'],
+            'prompt_caching_enabled' => ['required', 'boolean'],
+            'semantic_cache_enabled' => ['required', 'boolean'],
+            'allowed_domains' => ['nullable', 'string', 'max:2000'],
             'monthly_token_limit' => ['required', 'integer', 'min:1000', 'max:100000000'],
             'status' => ['required', Rule::in(Client::STATUSES)],
             'widget_style' => ['required', Rule::in(Client::WIDGET_STYLES)],
