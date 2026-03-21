@@ -11,6 +11,26 @@ export type PlanRecord = {
     features: string[];
 };
 
+export type PlanListItem = PlanRecord & {
+    is_active: boolean;
+    clients_count: number;
+    created_at: string | null;
+};
+
+export type PlanFormRecord = {
+    id: number;
+    name: string;
+    slug: string;
+    description: string;
+    price_monthly: number;
+    monthly_token_limit: number;
+    monthly_message_limit: number;
+    max_knowledge_sources: number;
+    max_file_upload_mb: number;
+    features: string[];
+    is_active: boolean;
+};
+
 export type WidgetSettings = {
     primary_color: string;
     accent_color: string;

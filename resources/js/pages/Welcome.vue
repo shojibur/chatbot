@@ -35,7 +35,7 @@ const showContactModal = ref(false);
                     Contact Us
                 </button>
                 <Link
-                    :href="login()"
+                    :href="login.url()"
                     class="rounded-lg border border-white/10 bg-white/5 px-5 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10"
                 >
                     Log in
@@ -336,7 +336,7 @@ const showContactModal = ref(false);
                                 </svg>
                             </button>
                             <Link
-                                :href="login()"
+                                :href="login.url()"
                                 class="inline-flex items-center rounded-xl border border-white/20 px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
                             >
                                 Client Login
@@ -455,7 +455,7 @@ const showContactModal = ref(false);
 
                             <p class="mt-6 text-center text-xs text-slate-500">
                                 Already a client?
-                                <Link :href="login()" class="text-blue-400 hover:text-blue-300">Log in here</Link>
+                                <Link :href="login.url()" class="text-blue-400 hover:text-blue-300">Log in here</Link>
                             </p>
                         </div>
                     </Transition>

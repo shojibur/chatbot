@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
+use App\Http\Controllers\Admin\PlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -17,6 +18,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
     Route::post('clients/{client}/knowledge-sources', [KnowledgeSourceController::class, 'store'])
         ->name('clients.knowledge-sources.store');
+
+    Route::get('plans', [PlanController::class, 'index'])->name('plans.index');
+    Route::get('plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
+    Route::patch('plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
 });
 
 require __DIR__.'/settings.php';
