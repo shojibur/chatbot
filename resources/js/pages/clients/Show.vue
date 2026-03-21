@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Bot,
     DatabaseZap,
@@ -7,9 +7,12 @@ import {
     Globe,
     Link2,
     Plus,
+    RefreshCw,
+    Trash2,
     Upload,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,18 +54,9 @@ type Props = {
 const props = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-    },
-    {
-        title: 'Clients',
-        href: '/clients',
-    },
-    {
-        title: props.client.name,
-        href: `/clients/${props.client.id}`,
-    },
+    { title: 'Dashboard', href: dashboard() },
+    { title: 'Clients', href: '/clients' },
+    { title: props.client.name, href: `/clients/${props.client.id}` },
 ];
 
 const form = useForm<KnowledgeSourceForm>({
@@ -83,6 +77,46 @@ function submitKnowledgeSource(): void {
 function handleFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     form.source_file = input.files?.[0] ?? null;
+}
+
+// Knowledge source actions
+const deleteSourceTarget = ref<KnowledgeSourceRecord | null>(null);
+const deletingSource = ref(false);
+
+function confirmDeleteSource(source: KnowledgeSourceRecord) {
+    deleteSourceTarget.value = source;
+}
+
+function executeDeleteSource() {
+    if (!deleteSourceTarget.value) return;
+    deletingSource.value = true;
+    router.delete(`/clients/${props.client.id}/knowledge-sources/${deleteSourceTarget.value.id}`, {
+        preserveScroll: true,
+        onFinish: () => {
+            deletingSource.value = false;
+            deleteSourceTarget.value = null;
+        },
+    });
+}
+
+function retrySource(source: KnowledgeSourceRecord) {
+    router.post(`/clients/${props.client.id}/knowledge-sources/${source.id}/retry`, {}, {
+        preserveScroll: true,
+    });
+}
+
+// Client delete
+const showDeleteClient = ref(false);
+const deletingClient = ref(false);
+
+function executeDeleteClient() {
+    deletingClient.value = true;
+    router.delete(`/clients/${props.client.id}`, {
+        onFinish: () => {
+            deletingClient.value = false;
+            showDeleteClient.value = false;
+        },
+    });
 }
 
 const embedSnippet = computed(
@@ -120,15 +154,13 @@ const sourceTypeLabels: Record<string, string> = {
 };
 
 const statusMessage = computed(() => {
-    if (props.status === 'client-created') {
-        return 'Client created and ready for knowledge base setup.';
-    }
-    if (props.status === 'client-updated') {
-        return 'Client configuration updated.';
-    }
-    if (props.status === 'knowledge-source-created') {
-        return 'Knowledge source saved for processing.';
-    }
+    if (props.status === 'client-created') return 'Client created and ready for knowledge base setup.';
+    if (props.status === 'client-updated') return 'Client configuration updated.';
+    if (props.status === 'knowledge-source-created') return 'Knowledge source saved for processing.';
+    if (props.status === 'knowledge-source-deleted') return 'Knowledge source deleted.';
+    if (props.status === 'knowledge-source-updated') return 'Knowledge source updated.';
+    if (props.status === 'knowledge-source-retrying') return 'Knowledge source queued for reprocessing.';
+    if (props.status === 'knowledge-source-duplicate') return 'This knowledge source already exists.';
     return null;
 });
 
@@ -166,6 +198,9 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                     </Button>
                     <Button variant="outline" size="sm" as-child>
                         <Link href="/clients">Back to clients</Link>
+                    </Button>
+                    <Button variant="outline" size="sm" class="text-red-600 hover:bg-red-50" @click="showDeleteClient = true">
+                        <Trash2 class="size-3.5" />
                     </Button>
                 </div>
             </div>
@@ -304,11 +339,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
 
                     <!-- Source list -->
                     <div v-if="knowledge_sources.length > 0" class="overflow-hidden rounded-lg border border-sidebar-border/70">
-                        <div class="hidden border-b border-sidebar-border/70 bg-muted/30 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr]">
+                        <div class="hidden border-b border-sidebar-border/70 bg-muted/30 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-muted-foreground sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
                             <span>Source</span>
                             <span>Type</span>
                             <span>Chunks</span>
                             <span>Status</span>
+                            <span class="w-20 text-right">Actions</span>
                         </div>
                         <div class="divide-y divide-sidebar-border/70">
                             <div
@@ -317,11 +353,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                 class="px-4 py-3"
                             >
                                 <!-- Desktop row -->
-                                <div class="hidden items-center sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr]">
+                                <div class="hidden items-center sm:grid sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-medium">{{ source.title }}</p>
                                         <p v-if="source.source_url" class="truncate text-xs text-muted-foreground">{{ source.source_url }}</p>
                                         <p v-if="source.file_name" class="truncate text-xs text-muted-foreground">{{ source.file_name }}</p>
+                                        <p v-if="source.processing_error" class="mt-0.5 truncate text-xs text-red-500">{{ source.processing_error }}</p>
                                     </div>
                                     <Badge variant="outline" class="w-fit text-xs">
                                         {{ sourceTypeLabels[source.source_type] ?? source.source_type }}
@@ -332,6 +369,23 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     <Badge :variant="badgeVariant(source.status)" class="w-fit text-xs">
                                         {{ statusLabels[source.status] ?? source.status }}
                                     </Badge>
+                                    <div class="flex w-20 justify-end gap-1">
+                                        <button
+                                            v-if="source.status === 'failed'"
+                                            @click="retrySource(source)"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                                            title="Retry processing"
+                                        >
+                                            <RefreshCw class="size-3.5" />
+                                        </button>
+                                        <button
+                                            @click="confirmDeleteSource(source)"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-red-50 hover:text-red-600"
+                                            title="Delete source"
+                                        >
+                                            <Trash2 class="size-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <!-- Mobile -->
                                 <div class="space-y-1.5 sm:hidden">
@@ -347,6 +401,28 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     <p class="text-xs text-muted-foreground">
                                         {{ source.chunk_count }} chunks &middot; {{ source.token_estimate.toLocaleString() }} tokens
                                     </p>
+                                    <p v-if="source.processing_error" class="text-xs text-red-500">{{ source.processing_error }}</p>
+                                    <div class="flex gap-2 pt-1">
+                                        <Button
+                                            v-if="source.status === 'failed'"
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 text-xs"
+                                            @click="retrySource(source)"
+                                        >
+                                            <RefreshCw class="mr-1 size-3" />
+                                            Retry
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 text-xs text-red-600 hover:bg-red-50"
+                                            @click="confirmDeleteSource(source)"
+                                        >
+                                            <Trash2 class="mr-1 size-3" />
+                                            Delete
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -441,7 +517,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                 <pre class="mt-2 overflow-x-auto rounded-lg bg-slate-950 px-3 py-2.5 text-xs text-slate-100"><code>{{ embedSnippet }}</code></pre>
                             </div>
 
-                            <!-- Package + AI config in a compact grid -->
+                            <!-- Package + AI config -->
                             <div class="grid gap-4 sm:grid-cols-2">
                                 <div>
                                     <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -497,5 +573,25 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                 </div>
             </section>
         </div>
+
+        <!-- Delete source dialog -->
+        <ConfirmDeleteDialog
+            :open="!!deleteSourceTarget"
+            :title="`Delete '${deleteSourceTarget?.title ?? 'source'}'?`"
+            description="This will permanently delete the knowledge source and all its chunks. This action cannot be undone."
+            :processing="deletingSource"
+            @close="deleteSourceTarget = null"
+            @confirm="executeDeleteSource"
+        />
+
+        <!-- Delete client dialog -->
+        <ConfirmDeleteDialog
+            :open="showDeleteClient"
+            :title="`Delete ${client.name}?`"
+            description="This will permanently delete the client and all associated knowledge sources, usage logs, and cache entries. This action cannot be undone."
+            :processing="deletingClient"
+            @close="showDeleteClient = false"
+            @confirm="executeDeleteClient"
+        />
     </AppLayout>
 </template>

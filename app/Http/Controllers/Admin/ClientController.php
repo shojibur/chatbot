@@ -168,6 +168,16 @@ class ClientController extends Controller
     }
 
     /**
+     * Delete the specified client and all related data.
+     */
+    public function destroy(Client $client): RedirectResponse
+    {
+        $client->delete();
+
+        return to_route('clients.index')->with('status', 'client-deleted');
+    }
+
+    /**
      * Transform client form data into a persistable payload.
      *
      * @return array<string, mixed>

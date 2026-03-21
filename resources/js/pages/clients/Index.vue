@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArrowUpRight,
     FolderOpen,
     Pencil,
     Plus,
+    Search,
+    Trash2,
     Zap,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, ClientListItem } from '@/types';
@@ -30,15 +34,52 @@ type Props = {
 const props = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-    },
-    {
-        title: 'Clients',
-        href: '/clients',
-    },
+    { title: 'Dashboard', href: dashboard() },
+    { title: 'Clients', href: '/clients' },
 ];
+
+// Search & filter
+const search = ref('');
+const statusFilter = ref('all');
+
+const filteredClients = computed(() => {
+    let result = props.clients;
+
+    if (search.value) {
+        const q = search.value.toLowerCase();
+        result = result.filter(
+            (c) =>
+                c.name.toLowerCase().includes(q) ||
+                (c.contact_email?.toLowerCase().includes(q) ?? false) ||
+                (c.plan?.name.toLowerCase().includes(q) ?? false),
+        );
+    }
+
+    if (statusFilter.value !== 'all') {
+        result = result.filter((c) => c.status === statusFilter.value);
+    }
+
+    return result;
+});
+
+// Delete
+const deleteTarget = ref<ClientListItem | null>(null);
+const deleting = ref(false);
+
+function confirmDelete(client: ClientListItem) {
+    deleteTarget.value = client;
+}
+
+function executeDelete() {
+    if (!deleteTarget.value) return;
+    deleting.value = true;
+    router.delete(`/clients/${deleteTarget.value.id}`, {
+        onFinish: () => {
+            deleting.value = false;
+            deleteTarget.value = null;
+        },
+    });
+}
 
 const statusLabels: Record<string, string> = {
     draft: 'Draft',
@@ -47,15 +88,10 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusMessage = computed(() => {
-    if (props.status === 'client-created') {
-        return 'Client created and ready for knowledge base setup.';
-    }
-    if (props.status === 'client-updated') {
-        return 'Client configuration updated.';
-    }
-    if (props.status === 'knowledge-source-created') {
-        return 'Knowledge source saved for processing.';
-    }
+    if (props.status === 'client-created') return 'Client created and ready for knowledge base setup.';
+    if (props.status === 'client-updated') return 'Client configuration updated.';
+    if (props.status === 'client-deleted') return 'Client deleted successfully.';
+    if (props.status === 'knowledge-source-created') return 'Knowledge source saved for processing.';
     return null;
 });
 
@@ -87,9 +123,9 @@ function usageColor(percent: number): string {
                 <div>
                     <h1 class="text-2xl font-semibold tracking-tight">Clients</h1>
                     <p class="text-sm text-muted-foreground">
-                        {{ props.summary.total_clients }} total &middot;
-                        {{ props.summary.active_clients }} active &middot;
-                        {{ props.summary.paused_clients }} paused
+                        {{ summary.total_clients }} total &middot;
+                        {{ summary.active_clients }} active &middot;
+                        {{ summary.paused_clients }} paused
                     </p>
                 </div>
                 <Button as-child>
@@ -106,6 +142,27 @@ function usageColor(percent: number): string {
                 class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-300/10 dark:bg-emerald-500/10 dark:text-emerald-200"
             >
                 {{ statusMessage }}
+            </div>
+
+            <!-- Search & filter bar -->
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div class="relative flex-1">
+                    <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        v-model="search"
+                        placeholder="Search by name, email, or plan..."
+                        class="pl-9"
+                    />
+                </div>
+                <select
+                    v-model="statusFilter"
+                    class="h-10 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="paused">Paused</option>
+                </select>
             </div>
 
             <!-- Empty state -->
@@ -126,6 +183,14 @@ function usageColor(percent: number): string {
                 </Button>
             </div>
 
+            <!-- No search results -->
+            <div
+                v-else-if="filteredClients.length === 0"
+                class="rounded-xl border border-dashed border-sidebar-border/70 py-12 text-center text-sm text-muted-foreground"
+            >
+                No clients match your search.
+            </div>
+
             <!-- Client table/list -->
             <div v-else class="overflow-hidden rounded-xl border border-sidebar-border/70">
                 <!-- Table header -->
@@ -134,25 +199,21 @@ function usageColor(percent: number): string {
                     <span>Plan</span>
                     <span>Sources</span>
                     <span>Usage</span>
-                    <span class="w-20 text-right">Actions</span>
+                    <span class="w-24 text-right">Actions</span>
                 </div>
 
                 <!-- Client rows -->
                 <div class="divide-y divide-sidebar-border/70">
                     <div
-                        v-for="client in clients"
+                        v-for="client in filteredClients"
                         :key="client.id"
                         class="group transition hover:bg-accent/30"
                     >
                         <!-- Desktop row -->
                         <div class="hidden items-center gap-4 px-6 py-4 md:grid md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-                            <!-- Client info -->
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <Link
-                                        :href="`/clients/${client.id}`"
-                                        class="truncate text-sm font-medium hover:underline"
-                                    >
+                                    <Link :href="`/clients/${client.id}`" class="truncate text-sm font-medium hover:underline">
                                         {{ client.name }}
                                     </Link>
                                     <Badge :variant="badgeVariant(client.status)" class="shrink-0 text-[10px]">
@@ -164,21 +225,16 @@ function usageColor(percent: number): string {
                                 </p>
                             </div>
 
-                            <!-- Plan -->
                             <div>
-                                <Badge v-if="client.plan" variant="outline" class="text-xs">
-                                    {{ client.plan.name }}
-                                </Badge>
+                                <Badge v-if="client.plan" variant="outline" class="text-xs">{{ client.plan.name }}</Badge>
                                 <span v-else class="text-xs text-muted-foreground">--</span>
                             </div>
 
-                            <!-- Sources -->
                             <div class="flex items-center gap-1.5 text-sm">
                                 <FolderOpen class="size-3.5 text-muted-foreground" />
                                 {{ client.knowledge_sources_count }}
                             </div>
 
-                            <!-- Usage bar -->
                             <div class="space-y-1">
                                 <div class="flex items-center justify-between text-xs">
                                     <span>{{ client.current_month_tokens.toLocaleString() }}</span>
@@ -193,8 +249,7 @@ function usageColor(percent: number): string {
                                 </div>
                             </div>
 
-                            <!-- Actions -->
-                            <div class="flex w-20 justify-end gap-1">
+                            <div class="flex w-24 justify-end gap-1">
                                 <Button variant="ghost" size="icon" as-child class="size-8">
                                     <Link :href="`/clients/${client.id}`">
                                         <ArrowUpRight class="size-4" />
@@ -205,6 +260,9 @@ function usageColor(percent: number): string {
                                         <Pencil class="size-3.5" />
                                     </Link>
                                 </Button>
+                                <Button variant="ghost" size="icon" class="size-8 text-muted-foreground hover:text-red-600" @click="confirmDelete(client)">
+                                    <Trash2 class="size-3.5" />
+                                </Button>
                             </div>
                         </div>
 
@@ -213,22 +271,15 @@ function usageColor(percent: number): string {
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <Link
-                                            :href="`/clients/${client.id}`"
-                                            class="text-sm font-medium hover:underline"
-                                        >
+                                        <Link :href="`/clients/${client.id}`" class="text-sm font-medium hover:underline">
                                             {{ client.name }}
                                         </Link>
                                         <Badge :variant="badgeVariant(client.status)" class="text-[10px]">
                                             {{ statusLabels[client.status] ?? client.status }}
                                         </Badge>
-                                        <Badge v-if="client.plan" variant="outline" class="text-[10px]">
-                                            {{ client.plan.name }}
-                                        </Badge>
+                                        <Badge v-if="client.plan" variant="outline" class="text-[10px]">{{ client.plan.name }}</Badge>
                                     </div>
-                                    <p class="mt-0.5 text-xs text-muted-foreground">
-                                        {{ client.contact_email ?? 'No email' }}
-                                    </p>
+                                    <p class="mt-0.5 text-xs text-muted-foreground">{{ client.contact_email ?? 'No email' }}</p>
                                 </div>
                             </div>
 
@@ -260,11 +311,24 @@ function usageColor(percent: number): string {
                                         <Pencil class="size-3.5" />
                                     </Link>
                                 </Button>
+                                <Button variant="outline" size="sm" class="text-red-600 hover:bg-red-50" @click="confirmDelete(client)">
+                                    <Trash2 class="size-3.5" />
+                                </Button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Delete confirm dialog -->
+        <ConfirmDeleteDialog
+            :open="!!deleteTarget"
+            :title="`Delete ${deleteTarget?.name ?? 'client'}?`"
+            description="This will permanently delete the client and all associated knowledge sources, usage logs, and cache entries. This action cannot be undone."
+            :processing="deleting"
+            @close="deleteTarget = null"
+            @confirm="executeDelete"
+        />
     </AppLayout>
 </template>

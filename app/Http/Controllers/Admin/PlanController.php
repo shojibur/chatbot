@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\UpdatePlanRequest;
 use App\Models\Plan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,45 @@ class PlanController extends Controller
             'plans' => $plans,
             'status' => $request->session()->get('status'),
         ]);
+    }
+
+    public function create(): Response
+    {
+        return Inertia::render('plans/Create', [
+            'plan' => [
+                'id' => null,
+                'name' => '',
+                'slug' => '',
+                'description' => '',
+                'price_monthly' => 0,
+                'monthly_token_limit' => 100000,
+                'monthly_message_limit' => 200,
+                'max_knowledge_sources' => 5,
+                'max_file_upload_mb' => 10,
+                'features' => [],
+                'is_active' => true,
+            ],
+        ]);
+    }
+
+    public function store(UpdatePlanRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        Plan::create([
+            'name' => $validated['name'],
+            'slug' => Str::slug($validated['name']),
+            'description' => $validated['description'],
+            'price_monthly' => $validated['price_monthly'],
+            'monthly_token_limit' => $validated['monthly_token_limit'],
+            'monthly_message_limit' => $validated['monthly_message_limit'],
+            'max_knowledge_sources' => $validated['max_knowledge_sources'],
+            'max_file_upload_mb' => $validated['max_file_upload_mb'],
+            'features' => array_values(array_filter($validated['features'] ?? [])),
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return to_route('plans.index')->with('status', 'plan-created');
     }
 
     public function edit(Plan $plan): Response
@@ -76,5 +116,16 @@ class PlanController extends Controller
         ]);
 
         return to_route('plans.index')->with('status', 'plan-updated');
+    }
+
+    public function destroy(Plan $plan): RedirectResponse
+    {
+        if ($plan->clients()->exists()) {
+            return to_route('plans.index')->with('status', 'plan-has-clients');
+        }
+
+        $plan->delete();
+
+        return to_route('plans.index')->with('status', 'plan-deleted');
     }
 }
