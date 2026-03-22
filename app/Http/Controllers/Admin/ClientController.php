@@ -145,6 +145,19 @@ class ClientController extends Controller
     }
 
     /**
+     * Show the chat playground for testing a client's chatbot.
+     */
+    public function playground(Client $client): Response
+    {
+        $client->load('plan');
+
+        return Inertia::render('clients/Playground', [
+            'client' => $this->transformClientWorkspace($client),
+            'api_base_url' => url('/'),
+        ]);
+    }
+
+    /**
      * Show the edit client page.
      */
     public function edit(Client $client): Response

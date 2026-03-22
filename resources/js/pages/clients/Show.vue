@@ -6,6 +6,7 @@ import {
     FileText,
     Globe,
     Link2,
+    MessageSquare,
     Plus,
     RefreshCw,
     Trash2,
@@ -193,6 +194,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                     </p>
                 </div>
                 <div class="flex shrink-0 gap-2">
+                    <Button as-child size="sm" :style="{ background: '#6366f1' }">
+                        <Link :href="`/clients/${client.id}/playground`">
+                            <MessageSquare class="mr-1 size-3.5" />
+                            Chat Playground
+                        </Link>
+                    </Button>
                     <Button as-child size="sm">
                         <Link :href="`/clients/${client.id}/edit`">Edit client</Link>
                     </Button>
