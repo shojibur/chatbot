@@ -2,11 +2,16 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     Bot,
+    ChevronDown,
+    ChevronUp,
     DatabaseZap,
+    Eye,
     FileText,
     Globe,
     Link2,
+    Loader2,
     MessageSquare,
+    Pencil,
     Plus,
     RefreshCw,
     Trash2,
@@ -104,6 +109,85 @@ function retrySource(source: KnowledgeSourceRecord) {
     router.post(`/clients/${props.client.id}/knowledge-sources/${source.id}/retry`, {}, {
         preserveScroll: true,
     });
+}
+
+// Edit manual source
+const editingSource = ref<KnowledgeSourceRecord | null>(null);
+const editForm = useForm({
+    title: '',
+    content: '',
+});
+
+function startEditSource(source: KnowledgeSourceRecord) {
+    editingSource.value = source;
+    editForm.title = source.title;
+    editForm.content = source.content ?? '';
+}
+
+function cancelEditSource() {
+    editingSource.value = null;
+    editForm.reset();
+}
+
+function submitEditSource() {
+    if (!editingSource.value) return;
+    editForm.patch(`/clients/${props.client.id}/knowledge-sources/${editingSource.value.id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingSource.value = null;
+            editForm.reset();
+        },
+    });
+}
+
+// View chunks
+interface ChunkRecord {
+    id: number;
+    chunk_index: number;
+    content: string;
+    token_estimate: number;
+    character_count: number;
+    has_embedding: boolean;
+    embedding_model: string | null;
+}
+
+const viewingChunksSourceId = ref<number | null>(null);
+const chunksData = ref<ChunkRecord[]>([]);
+const chunksLoading = ref(false);
+const chunksPage = ref(0);
+const chunksPerPage = 10;
+
+const visibleChunks = computed(() =>
+    chunksData.value.slice(0, (chunksPage.value + 1) * chunksPerPage)
+);
+const hasMoreChunks = computed(() =>
+    visibleChunks.value.length < chunksData.value.length
+);
+
+async function toggleViewChunks(source: KnowledgeSourceRecord) {
+    if (viewingChunksSourceId.value === source.id) {
+        viewingChunksSourceId.value = null;
+        chunksData.value = [];
+        chunksPage.value = 0;
+        return;
+    }
+
+    viewingChunksSourceId.value = source.id;
+    chunksLoading.value = true;
+    chunksPage.value = 0;
+
+    try {
+        const res = await fetch(`/clients/${props.client.id}/knowledge-sources/${source.id}/chunks`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        });
+        const data = await res.json();
+        chunksData.value = data.chunks ?? [];
+    } catch {
+        chunksData.value = [];
+    } finally {
+        chunksLoading.value = false;
+    }
 }
 
 // Client delete
@@ -376,7 +460,24 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     <Badge :variant="badgeVariant(source.status)" class="w-fit text-xs">
                                         {{ statusLabels[source.status] ?? source.status }}
                                     </Badge>
-                                    <div class="flex w-20 justify-end gap-1">
+                                    <div class="flex w-24 justify-end gap-1">
+                                        <button
+                                            v-if="source.chunk_count > 0"
+                                            @click="toggleViewChunks(source)"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                                            :title="viewingChunksSourceId === source.id ? 'Hide chunks' : 'View chunks'"
+                                        >
+                                            <ChevronUp v-if="viewingChunksSourceId === source.id" class="size-3.5" />
+                                            <Eye v-else class="size-3.5" />
+                                        </button>
+                                        <button
+                                            v-if="source.source_type === 'manual'"
+                                            @click="startEditSource(source)"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                                            title="Edit content"
+                                        >
+                                            <Pencil class="size-3.5" />
+                                        </button>
                                         <button
                                             v-if="source.status === 'failed'"
                                             @click="retrySource(source)"
@@ -394,6 +495,79 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                         </button>
                                     </div>
                                 </div>
+                                <!-- Inline edit form for manual sources -->
+                                <div v-if="editingSource?.id === source.id && source.source_type === 'manual'" class="mt-3 space-y-3 rounded-lg border border-sidebar-border/70 bg-muted/20 p-4">
+                                    <div class="grid gap-2">
+                                        <Label :for="`edit-title-${source.id}`">Title</Label>
+                                        <Input :id="`edit-title-${source.id}`" v-model="editForm.title" />
+                                        <InputError :message="editForm.errors.title" />
+                                    </div>
+                                    <div class="grid gap-2">
+                                        <Label :for="`edit-content-${source.id}`">Content</Label>
+                                        <textarea
+                                            :id="`edit-content-${source.id}`"
+                                            v-model="editForm.content"
+                                            class="min-h-32 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                            placeholder="Edit knowledge content..."
+                                        />
+                                        <InputError :message="editForm.errors.content" />
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <Button size="sm" :disabled="editForm.processing" @click="submitEditSource">
+                                            {{ editForm.processing ? 'Saving...' : 'Save changes' }}
+                                        </Button>
+                                        <Button variant="outline" size="sm" @click="cancelEditSource">Cancel</Button>
+                                    </div>
+                                </div>
+                                <!-- Chunks viewer -->
+                                <div v-if="viewingChunksSourceId === source.id" class="mt-3 rounded-lg border border-sidebar-border/70 bg-muted/10">
+                                    <!-- Loading state -->
+                                    <div v-if="chunksLoading" class="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+                                        <Loader2 class="size-4 animate-spin" />
+                                        Loading chunks...
+                                    </div>
+                                    <!-- Empty state -->
+                                    <div v-else-if="chunksData.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                                        No chunks found.
+                                    </div>
+                                    <!-- Chunks list -->
+                                    <template v-else>
+                                        <div class="border-b border-sidebar-border/50 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
+                                            {{ chunksData.length }} chunks extracted &middot;
+                                            {{ chunksData.reduce((sum, c) => sum + c.token_estimate, 0).toLocaleString() }} tokens &middot;
+                                            {{ chunksData.filter(c => c.has_embedding).length }} with embeddings
+                                        </div>
+                                        <div class="max-h-[500px] divide-y divide-sidebar-border/50 overflow-y-auto">
+                                            <div
+                                                v-for="chunk in visibleChunks"
+                                                :key="chunk.id"
+                                                class="px-4 py-3"
+                                            >
+                                                <div class="mb-1.5 flex items-center gap-2">
+                                                    <Badge variant="outline" class="h-5 text-[10px] tabular-nums">
+                                                        #{{ chunk.chunk_index }}
+                                                    </Badge>
+                                                    <span class="text-[10px] tabular-nums text-muted-foreground">
+                                                        {{ chunk.character_count }} chars &middot; ~{{ chunk.token_estimate }} tokens
+                                                    </span>
+                                                    <Badge
+                                                        :variant="chunk.has_embedding ? 'default' : 'secondary'"
+                                                        class="h-5 text-[9px]"
+                                                    >
+                                                        {{ chunk.has_embedding ? 'embedded' : 'no vector' }}
+                                                    </Badge>
+                                                </div>
+                                                <p class="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{{ chunk.content }}</p>
+                                            </div>
+                                        </div>
+                                        <div v-if="hasMoreChunks" class="border-t border-sidebar-border/50 px-4 py-2.5 text-center">
+                                            <Button variant="ghost" size="sm" class="h-7 text-xs" @click="chunksPage++">
+                                                <ChevronDown class="mr-1 size-3" />
+                                                Show more ({{ chunksData.length - visibleChunks.length }} remaining)
+                                            </Button>
+                                        </div>
+                                    </template>
+                                </div>
                                 <!-- Mobile -->
                                 <div class="space-y-1.5 sm:hidden">
                                     <div class="flex flex-wrap items-center gap-2">
@@ -409,7 +583,27 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                         {{ source.chunk_count }} chunks &middot; {{ source.token_estimate.toLocaleString() }} tokens
                                     </p>
                                     <p v-if="source.processing_error" class="text-xs text-red-500">{{ source.processing_error }}</p>
-                                    <div class="flex gap-2 pt-1">
+                                    <div class="flex flex-wrap gap-2 pt-1">
+                                        <Button
+                                            v-if="source.chunk_count > 0"
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 text-xs"
+                                            @click="toggleViewChunks(source)"
+                                        >
+                                            <Eye class="mr-1 size-3" />
+                                            {{ viewingChunksSourceId === source.id ? 'Hide' : 'View' }} chunks
+                                        </Button>
+                                        <Button
+                                            v-if="source.source_type === 'manual'"
+                                            variant="outline"
+                                            size="sm"
+                                            class="h-7 text-xs"
+                                            @click="startEditSource(source)"
+                                        >
+                                            <Pencil class="mr-1 size-3" />
+                                            Edit
+                                        </Button>
                                         <Button
                                             v-if="source.status === 'failed'"
                                             variant="outline"

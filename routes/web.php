@@ -28,6 +28,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('clients.knowledge-sources.destroy');
     Route::post('clients/{client}/knowledge-sources/{knowledgeSource}/retry', [KnowledgeSourceController::class, 'retry'])
         ->name('clients.knowledge-sources.retry');
+    Route::get('clients/{client}/knowledge-sources/{knowledgeSource}/chunks', [KnowledgeSourceController::class, 'chunks'])
+        ->name('clients.knowledge-sources.chunks');
 
     Route::get('plans', [PlanController::class, 'index'])->name('plans.index');
     Route::get('plans/create', [PlanController::class, 'create'])->name('plans.create');

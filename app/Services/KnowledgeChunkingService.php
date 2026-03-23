@@ -20,9 +20,22 @@ class KnowledgeChunkingService
         }
 
         $length = Str::length($normalized);
+
+        // If text fits in a single chunk, return it directly
+        if ($length <= $chunkSize) {
+            return [[
+                'chunk_index' => 0,
+                'content' => $normalized,
+                'content_hash' => hash('sha256', $normalized),
+                'character_count' => strlen($normalized),
+                'token_estimate' => $this->estimateTokens($normalized),
+            ]];
+        }
+
         $chunks = [];
         $offset = 0;
         $index = 0;
+        $step = $chunkSize - $overlap;
 
         while ($offset < $length) {
             $window = Str::substr($normalized, $offset, $chunkSize);
@@ -52,7 +65,7 @@ class KnowledgeChunkingService
                 'token_estimate' => $this->estimateTokens($window),
             ];
 
-            $offset += max(1, strlen($window) - $overlap);
+            $offset += max($step, strlen($window) - $overlap);
             $index++;
         }
 

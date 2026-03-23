@@ -115,6 +115,7 @@ export type KnowledgeSourceRecord = {
     status: string;
     source_url: string | null;
     source_hash: string | null;
+    content: string | null;
     file_name: string | null;
     token_estimate: number;
     chunk_count: number;

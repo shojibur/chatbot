@@ -430,6 +430,7 @@ class ClientController extends Controller
             'status' => $knowledgeSource->status,
             'source_url' => $knowledgeSource->source_url,
             'source_hash' => $knowledgeSource->source_hash,
+            'content' => $knowledgeSource->source_type === 'manual' ? $knowledgeSource->content : null,
             'file_name' => $knowledgeSource->file_name,
             'token_estimate' => $knowledgeSource->token_estimate,
             'chunk_count' => $knowledgeSource->chunk_count,
