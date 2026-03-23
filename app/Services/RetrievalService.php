@@ -67,8 +67,10 @@ class RetrievalService
             return '';
         }
 
+        $chunks->loadMissing('knowledgeSource:id,title');
+
         return $chunks
-            ->map(fn (KnowledgeChunk $chunk, int $i) => '[Source '.($i + 1)."]\n".$chunk->content)
+            ->map(fn (KnowledgeChunk $chunk, int $i) => '[Source '.($i + 1).': '.($chunk->knowledgeSource?->title ?? 'Unknown')."]\n".$chunk->content)
             ->implode("\n\n---\n\n");
     }
 }

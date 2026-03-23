@@ -154,13 +154,13 @@ class ChatController extends Controller
 
     private function buildSystemPrompt(Client $client, string $context): string
     {
-        $base = $client->system_prompt ?: 'You are a helpful assistant for '.$client->name.'. Answer questions based only on the provided context. If you don\'t know the answer, say so.';
+        $base = $client->system_prompt ?: 'You are a helpful assistant for '.$client->name.'. Answer questions using the provided knowledge base context. If you don\'t know the answer, say so politely.';
 
         if (! $context) {
-            return $base."\n\nNo relevant knowledge base content was found for this question. Let the user know you don't have specific information about their query.";
+            return $base."\n\nNo relevant knowledge base content was found for this question. Politely let the user know you don't have specific information about their query and suggest they contact ".$client->name.' directly for help.';
         }
 
-        return $base."\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---\n\nAnswer the user's question using ONLY the context above. If the context doesn't contain relevant information, say you don't have that information.";
+        return $base."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$client->name."'s approved knowledge base.\n- You MUST use this context to answer the user's question.\n- Extract specific details like pricing, services, contact info, policies, etc. from the context.\n- If the context contains the answer, provide it directly and specifically — do NOT say you don't have the information.\n- Only say you don't have information if the context truly does not address the question.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
     }
 
     private function currentMonthTokens(Client $client): int
