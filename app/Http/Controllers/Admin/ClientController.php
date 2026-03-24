@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreClientRequest;
 use App\Http\Requests\Admin\UpdateClientRequest;
+use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\ConversationCache;
 use App\Models\KnowledgeSource;
@@ -154,6 +155,43 @@ class ClientController extends Controller
         return Inertia::render('clients/Playground', [
             'client' => $this->transformClientWorkspace($client),
             'api_base_url' => url('/'),
+        ]);
+    }
+
+    /**
+     * Show the chat history for a client.
+     */
+    public function chatHistory(Request $request, Client $client): Response
+    {
+        $client->load('plan');
+
+        $sessions = $client->chatSessions()
+            ->with(['messages' => fn ($query) => $query->orderBy('created_at')])
+            ->orderByDesc('last_activity_at')
+            ->paginate(20);
+
+        return Inertia::render('clients/ChatHistory', [
+            'client' => $this->transformClientWorkspace($client),
+            'sessions' => $sessions->through(fn (ChatSession $session): array => [
+                'id' => $session->id,
+                'session_token' => $session->session_token,
+                'visitor_ip' => $session->visitor_ip,
+                'visitor_identifier' => $session->visitor_identifier,
+                'page_url' => $session->page_url,
+                'user_agent' => $session->user_agent,
+                'message_count' => $session->message_count,
+                'total_tokens' => $session->total_tokens,
+                'last_activity_at' => $session->last_activity_at?->toDateTimeString(),
+                'created_at' => $session->created_at?->toDateTimeString(),
+                'messages' => $session->messages->map(fn ($message): array => [
+                    'id' => $message->id,
+                    'role' => $message->role,
+                    'content' => $message->content,
+                    'token_count' => $message->token_count,
+                    'from_cache' => $message->from_cache,
+                    'created_at' => $message->created_at?->toDateTimeString(),
+                ]),
+            ]),
         ]);
     }
 

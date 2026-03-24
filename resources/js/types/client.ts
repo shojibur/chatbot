@@ -165,3 +165,26 @@ export type CacheEntryRecord = {
     last_hit_at: string | null;
     expires_at: string | null;
 };
+
+export type ChatMessageRecord = {
+    id: number;
+    role: 'user' | 'assistant';
+    content: string;
+    token_count: number;
+    from_cache: boolean;
+    created_at: string | null;
+};
+
+export type ChatSessionRecord = {
+    id: number;
+    session_token: string;
+    visitor_ip: string | null;
+    visitor_identifier: string | null;
+    page_url: string | null;
+    user_agent: string | null;
+    message_count: number;
+    total_tokens: number;
+    last_activity_at: string | null;
+    created_at: string | null;
+    messages: ChatMessageRecord[];
+};

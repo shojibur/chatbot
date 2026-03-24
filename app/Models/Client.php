@@ -125,4 +125,20 @@ class Client extends Model
     {
         return $this->hasMany(ConversationCache::class);
     }
+
+    /**
+     * Get the chat sessions for the client.
+     */
+    public function chatSessions(): HasMany
+    {
+        return $this->hasMany(ChatSession::class);
+    }
+
+    /**
+     * Get all chat messages for the client.
+     */
+    public function chatMessages(): HasMany
+    {
+        return $this->hasMany(ChatMessage::class);
+    }
 }

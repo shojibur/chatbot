@@ -4,6 +4,7 @@ import {
     Bot,
     ChevronDown,
     ChevronUp,
+    Clock,
     DatabaseZap,
     Eye,
     FileText,
@@ -282,6 +283,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                         <Link :href="`/clients/${client.id}/playground`">
                             <MessageSquare class="mr-1 size-3.5" />
                             Chat Playground
+                        </Link>
+                    </Button>
+                    <Button as-child size="sm" variant="outline">
+                        <Link :href="`/clients/${client.id}/chat-history`">
+                            <Clock class="mr-1 size-3.5" />
+                            Chat History
                         </Link>
                     </Button>
                     <Button as-child size="sm">

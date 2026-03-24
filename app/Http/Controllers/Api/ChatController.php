@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ChatRequest;
 use App\Models\Client;
 use App\Models\UsageLog;
+use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\RetrievalService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,7 @@ class ChatController extends Controller
     public function __construct(
         private readonly RetrievalService $retrievalService,
         private readonly ConversationCacheService $cacheService,
+        private readonly ChatHistoryService $chatHistoryService,
     ) {}
 
     public function chat(ChatRequest $request): JsonResponse
@@ -38,6 +40,10 @@ class ChatController extends Controller
         $chatModel = $client->chat_model ?? 'gpt-4o-mini';
         $promptHash = hash('sha256', $client->system_prompt ?? '');
 
+        // Resolve or create a chat session and log the user message
+        $chatSession = $this->chatHistoryService->resolveSession($client, $request);
+        $this->chatHistoryService->logUserMessage($chatSession, $message);
+
         // Check cache first
         if ($client->semantic_cache_enabled) {
             $cached = $this->cacheService->find($client, $message, $chatModel, $promptHash);
@@ -58,9 +64,12 @@ class ChatController extends Controller
                     'meta' => ['cache_id' => $cached->id],
                 ]);
 
+                $this->chatHistoryService->logAssistantMessage($chatSession, $cached->answer, 0, true);
+
                 return response()->json([
                     'answer' => $cached->answer,
                     'cached' => true,
+                    'session_token' => $chatSession->session_token,
                 ]);
             }
         }
@@ -125,9 +134,13 @@ class ChatController extends Controller
             ])->save();
         }
 
+        // Log the assistant response to chat history
+        $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
+
         return response()->json([
             'answer' => $answer,
             'cached' => false,
+            'session_token' => $chatSession->session_token,
         ]);
     }
 
