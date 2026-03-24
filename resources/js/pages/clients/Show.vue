@@ -30,11 +30,9 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type {
     BreadcrumbItem,
-    CacheEntryRecord,
     ClientWorkspace,
     KnowledgeSourceRecord,
     MemorySummary,
-    UsageLogRecord,
     UsageSummary,
 } from '@/types';
 
@@ -51,8 +49,6 @@ type Props = {
     knowledge_sources: KnowledgeSourceRecord[];
     usage_summary: UsageSummary;
     memory_summary: MemorySummary;
-    usage_logs: UsageLogRecord[];
-    cache_entries: CacheEntryRecord[];
     knowledge_source_types: string[];
     widget_script_url: string;
     status?: string;
@@ -644,72 +640,9 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                 </CardContent>
             </Card>
 
-            <!-- Two-column: Usage history + Sidebar info -->
-            <section class="grid gap-6 xl:grid-cols-[1fr_1fr]">
-                <!-- Usage history -->
-                <Card class="gap-0 border-sidebar-border/70">
-                    <CardHeader class="border-b border-sidebar-border/70">
-                        <h2 class="text-lg font-semibold">Usage history</h2>
-                        <p class="text-sm text-muted-foreground">Recent API activity</p>
-                    </CardHeader>
-                    <CardContent class="p-0">
-                        <div v-if="usage_logs.length === 0" class="p-6 text-center text-sm text-muted-foreground">
-                            No usage logs yet.
-                        </div>
-                        <div v-else class="divide-y divide-sidebar-border/70">
-                            <div
-                                v-for="log in usage_logs"
-                                :key="log.id"
-                                class="flex items-center justify-between gap-4 px-4 py-3"
-                            >
-                                <div class="min-w-0">
-                                    <p class="truncate text-sm">{{ log.request_excerpt ?? 'No excerpt' }}</p>
-                                    <div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                                        <Badge :variant="log.interaction_type === 'cache_hit' ? 'secondary' : 'outline'" class="text-[10px]">
-                                            {{ log.interaction_type }}
-                                        </Badge>
-                                        <span>{{ log.model ?? 'n/a' }}</span>
-                                    </div>
-                                </div>
-                                <div class="shrink-0 text-right">
-                                    <p class="text-sm tabular-nums">{{ log.total_tokens.toLocaleString() }} tokens</p>
-                                    <p class="text-xs text-muted-foreground">{{ formatCurrency(log.estimated_cost) }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <!-- Cache + Config combined -->
+            <!-- Config section -->
+            <section class="grid gap-6">
                 <div class="grid gap-6">
-                    <!-- Answer cache -->
-                    <Card class="gap-0 border-sidebar-border/70">
-                        <CardHeader class="border-b border-sidebar-border/70">
-                            <h2 class="text-lg font-semibold">Answer cache</h2>
-                            <p class="text-sm text-muted-foreground">Cached responses for repeated questions</p>
-                        </CardHeader>
-                        <CardContent class="p-0">
-                            <div v-if="cache_entries.length === 0" class="p-6 text-center text-sm text-muted-foreground">
-                                No cache entries yet.
-                            </div>
-                            <div v-else class="divide-y divide-sidebar-border/70">
-                                <div
-                                    v-for="entry in cache_entries"
-                                    :key="entry.id"
-                                    class="px-4 py-3"
-                                >
-                                    <p class="text-sm font-medium">{{ entry.question }}</p>
-                                    <p class="mt-1 line-clamp-2 text-xs text-muted-foreground">{{ entry.answer }}</p>
-                                    <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                        <span>{{ entry.hit_count }} hits</span>
-                                        <span>{{ entry.total_tokens_saved.toLocaleString() }} tokens saved</span>
-                                        <span v-if="entry.expires_at">Expires {{ formatDate(entry.expires_at) }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
                     <!-- Config summary -->
                     <Card class="gap-0 border-sidebar-border/70">
                         <CardHeader class="border-b border-sidebar-border/70">

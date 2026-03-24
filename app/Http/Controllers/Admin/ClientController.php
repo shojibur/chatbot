@@ -7,7 +7,6 @@ use App\Http\Requests\Admin\StoreClientRequest;
 use App\Http\Requests\Admin\UpdateClientRequest;
 use App\Models\ChatSession;
 use App\Models\Client;
-use App\Models\ConversationCache;
 use App\Models\KnowledgeSource;
 use App\Models\Plan;
 use Carbon\CarbonImmutable;
@@ -85,19 +84,16 @@ class ClientController extends Controller
         $client->load([
             'plan',
             'knowledgeSources' => fn ($query) => $query->latest(),
-            'usageLogs' => fn ($query) => $query->latest()->limit(25),
-            'conversationCaches' => fn ($query) => $query
-                ->select(['id', 'client_id', 'question', 'answer', 'hit_count', 'total_tokens_saved', 'last_hit_at', 'expires_at', 'created_at'])
-                ->orderByDesc('last_hit_at')
-                ->orderByDesc('id')
-                ->limit(20),
         ]);
 
-        $currentPeriodLogs = $client->usageLogs()
+        // Lightweight aggregate queries only — no loading full records
+        $usageSummary = $client->usageLogs()
             ->where('created_at', '>=', $periodStart)
-            ->get();
-
-        $conversationCaches = $client->conversationCaches;
+            ->selectRaw('COALESCE(SUM(total_tokens), 0) as total_tokens')
+            ->selectRaw('COALESCE(SUM(cached_input_tokens), 0) as cached_tokens')
+            ->selectRaw('COALESCE(SUM(estimated_cost), 0) as total_cost')
+            ->selectRaw('COUNT(*) as request_count')
+            ->first();
 
         return Inertia::render('clients/Show', [
             'client' => $this->transformClientWorkspace($client),
@@ -105,10 +101,10 @@ class ClientController extends Controller
                 fn (KnowledgeSource $knowledgeSource): array => $this->transformKnowledgeSource($knowledgeSource),
             ),
             'usage_summary' => [
-                'current_period_tokens' => $currentPeriodLogs->sum('total_tokens'),
-                'current_period_cached_tokens' => $currentPeriodLogs->sum('cached_input_tokens'),
-                'current_period_cost' => (float) $currentPeriodLogs->sum('estimated_cost'),
-                'current_period_requests' => $currentPeriodLogs->count(),
+                'current_period_tokens' => (int) $usageSummary->total_tokens,
+                'current_period_cached_tokens' => (int) $usageSummary->cached_tokens,
+                'current_period_cost' => (float) $usageSummary->total_cost,
+                'current_period_requests' => (int) $usageSummary->request_count,
             ],
             'memory_summary' => [
                 'knowledge_sources' => $client->knowledgeSources->count(),
@@ -119,27 +115,6 @@ class ClientController extends Controller
                 'cache_hits' => (int) $client->conversationCaches()->sum('hit_count'),
                 'saved_tokens' => (int) $client->conversationCaches()->sum('total_tokens_saved'),
             ],
-            'usage_logs' => $client->usageLogs->map(fn ($usageLog): array => [
-                'id' => $usageLog->id,
-                'interaction_type' => $usageLog->interaction_type,
-                'model' => $usageLog->model,
-                'prompt_tokens' => $usageLog->prompt_tokens,
-                'completion_tokens' => $usageLog->completion_tokens,
-                'cached_input_tokens' => $usageLog->cached_input_tokens,
-                'total_tokens' => $usageLog->total_tokens,
-                'estimated_cost' => (float) $usageLog->estimated_cost,
-                'request_excerpt' => $usageLog->request_excerpt,
-                'created_at' => $usageLog->created_at?->toDateTimeString(),
-            ]),
-            'cache_entries' => $conversationCaches->map(fn (ConversationCache $cache): array => [
-                'id' => $cache->id,
-                'question' => $cache->question,
-                'answer' => $cache->answer,
-                'hit_count' => $cache->hit_count,
-                'total_tokens_saved' => $cache->total_tokens_saved,
-                'last_hit_at' => $cache->last_hit_at?->toDateTimeString(),
-                'expires_at' => $cache->expires_at?->toDateTimeString(),
-            ]),
             'knowledge_source_types' => KnowledgeSource::SOURCE_TYPES,
             'widget_script_url' => url('/widget/widget.js'),
             'status' => $request->session()->get('status'),
