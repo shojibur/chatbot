@@ -13,7 +13,6 @@ import {
     Loader2,
     MessageSquare,
     Pencil,
-    Plus,
     RefreshCw,
     Trash2,
     Upload,
@@ -206,14 +205,6 @@ const embedSnippet = computed(
         `<script src="${props.widget_script_url}" data-client-code="${props.client.unique_code}" async><\/script>`,
 );
 
-function formatDate(value?: string | null): string {
-    if (!value) return '--';
-    return new Date(value).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
-}
 
 function formatCurrency(value: number): string {
     return `$${value.toFixed(4)}`;
@@ -274,7 +265,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                         {{ client.business_description || 'No business description yet.' }}
                     </p>
                 </div>
-                <div class="flex shrink-0 gap-2">
+                <div class="flex flex-wrap shrink-0 gap-2">
                     <Button as-child size="sm" :style="{ background: '#6366f1' }">
                         <Link :href="`/clients/${client.id}/playground`">
                             <MessageSquare class="mr-1 size-3.5" />
@@ -285,6 +276,18 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                         <Link :href="`/clients/${client.id}/chat-history`">
                             <Clock class="mr-1 size-3.5" />
                             Chat History
+                        </Link>
+                    </Button>
+                    <Button as-child size="sm" variant="outline">
+                        <Link :href="`/clients/${client.id}/usage-logs`">
+                            <FileText class="mr-1 size-3.5" />
+                            Usage Logs
+                        </Link>
+                    </Button>
+                    <Button as-child size="sm" variant="outline">
+                        <Link :href="`/clients/${client.id}/cache-entries`">
+                            <DatabaseZap class="mr-1 size-3.5" />
+                            Cache
                         </Link>
                     </Button>
                     <Button as-child size="sm">

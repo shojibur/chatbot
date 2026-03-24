@@ -20,6 +20,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('clients/{client}/edit', [ClientController::class, 'edit'])->name('clients.edit');
     Route::get('clients/{client}/playground', [ClientController::class, 'playground'])->name('clients.playground');
     Route::get('clients/{client}/chat-history', [ClientController::class, 'chatHistory'])->name('clients.chat-history');
+    Route::get('clients/{client}/usage-logs', [ClientController::class, 'usageLogs'])->name('clients.usage-logs');
+    Route::get('clients/{client}/cache-entries', [ClientController::class, 'cacheEntries'])->name('clients.cache-entries');
     Route::patch('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
     Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
 

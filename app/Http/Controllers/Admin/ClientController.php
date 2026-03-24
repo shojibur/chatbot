@@ -172,6 +172,56 @@ class ClientController extends Controller
     }
 
     /**
+     * Show the usage logs for a client.
+     */
+    public function usageLogs(Request $request, Client $client): Response
+    {
+        $client->load('plan');
+
+        $logs = $client->usageLogs()
+            ->latest()
+            ->paginate(50);
+
+        return Inertia::render('clients/UsageLogs', [
+            'client' => $this->transformClientWorkspace($client),
+            'logs' => $logs->through(fn ($log): array => [
+                'id' => $log->id,
+                'request_excerpt' => $log->request_excerpt,
+                'interaction_type' => $log->interaction_type,
+                'model' => $log->model,
+                'total_tokens' => $log->total_tokens,
+                'estimated_cost' => (float) $log->estimated_cost,
+                'created_at' => $log->created_at?->toDateTimeString(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Show the cache entries for a client.
+     */
+    public function cacheEntries(Request $request, Client $client): Response
+    {
+        $client->load('plan');
+
+        $entries = $client->conversationCaches()
+            ->latest('last_accessed_at')
+            ->paginate(50);
+
+        return Inertia::render('clients/CacheEntries', [
+            'client' => $this->transformClientWorkspace($client),
+            'entries' => $entries->through(fn ($entry): array => [
+                'id' => $entry->id,
+                'question' => $entry->question,
+                'answer' => $entry->answer,
+                'hit_count' => $entry->hit_count,
+                'total_tokens_saved' => $entry->total_tokens_saved,
+                'expires_at' => $entry->expires_at?->toDateTimeString(),
+                'created_at' => $entry->created_at?->toDateTimeString(),
+            ]),
+        ]);
+    }
+
+    /**
      * Show the edit client page.
      */
     public function edit(Client $client): Response

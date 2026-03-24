@@ -164,6 +164,7 @@ export type CacheEntryRecord = {
     total_tokens_saved: number;
     last_hit_at: string | null;
     expires_at: string | null;
+    created_at: string | null;
 };
 
 export type ChatMessageRecord = {
