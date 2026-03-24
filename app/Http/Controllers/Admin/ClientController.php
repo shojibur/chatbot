@@ -144,7 +144,7 @@ class ClientController extends Controller
         $sessions = $client->chatSessions()
             ->with(['messages' => fn ($query) => $query->orderBy('created_at')])
             ->orderByDesc('last_activity_at')
-            ->paginate(20);
+            ->simplePaginate(20);
 
         return Inertia::render('clients/ChatHistory', [
             'client' => $this->transformClientWorkspace($client),
@@ -180,7 +180,7 @@ class ClientController extends Controller
 
         $logs = $client->usageLogs()
             ->latest()
-            ->paginate(50);
+            ->simplePaginate(50);
 
         return Inertia::render('clients/UsageLogs', [
             'client' => $this->transformClientWorkspace($client),
@@ -205,7 +205,7 @@ class ClientController extends Controller
 
         $entries = $client->conversationCaches()
             ->latest('last_hit_at')
-            ->paginate(50);
+            ->simplePaginate(50);
 
         return Inertia::render('clients/CacheEntries', [
             'client' => $this->transformClientWorkspace($client),

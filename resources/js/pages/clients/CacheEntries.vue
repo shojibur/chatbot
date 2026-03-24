@@ -10,9 +10,7 @@ import type { BreadcrumbItem, ClientWorkspace, CacheEntryRecord } from '@/types'
 type PaginatedEntries = {
     data: CacheEntryRecord[];
     current_page: number;
-    last_page: number;
     per_page: number;
-    total: number;
     next_page_url: string | null;
     prev_page_url: string | null;
 };
@@ -35,6 +33,7 @@ function formatDate(value?: string | null): string {
     if (!value) {
         return '--';
     }
+
     return new Date(value).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -45,6 +44,7 @@ function formatDateTime(value?: string | null): string {
     if (!value) {
         return '--';
     }
+
     return new Date(value).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -102,12 +102,11 @@ function formatDateTime(value?: string | null): string {
 
                     <!-- Pagination -->
                     <div
-                        v-if="entries.last_page > 1"
+                        v-if="entries.prev_page_url || entries.next_page_url"
                         class="flex items-center justify-between border-t border-sidebar-border/70 px-4 py-3"
                     >
                         <p class="text-sm text-muted-foreground">
-                            Page {{ entries.current_page }} of {{ entries.last_page }}
-                            ({{ entries.total }} entries)
+                            Page {{ entries.current_page }}
                         </p>
                         <div class="flex gap-2">
                             <Button
@@ -119,12 +118,28 @@ function formatDateTime(value?: string | null): string {
                                 <Link :href="entries.prev_page_url" preserve-scroll>Previous</Link>
                             </Button>
                             <Button
+                                v-else
+                                variant="outline"
+                                size="sm"
+                                disabled
+                            >
+                                Previous
+                            </Button>
+                            <Button
                                 v-if="entries.next_page_url"
                                 variant="outline"
                                 size="sm"
                                 as-child
                             >
                                 <Link :href="entries.next_page_url" preserve-scroll>Next</Link>
+                            </Button>
+                            <Button
+                                v-else
+                                variant="outline"
+                                size="sm"
+                                disabled
+                            >
+                                Next
                             </Button>
                         </div>
                     </div>

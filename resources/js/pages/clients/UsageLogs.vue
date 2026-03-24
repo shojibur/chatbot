@@ -11,9 +11,7 @@ import type { BreadcrumbItem, ClientWorkspace, UsageLogRecord } from '@/types';
 type PaginatedLogs = {
     data: UsageLogRecord[];
     current_page: number;
-    last_page: number;
     per_page: number;
-    total: number;
     next_page_url: string | null;
     prev_page_url: string | null;
 };
@@ -40,6 +38,7 @@ function formatDateTime(value?: string | null): string {
     if (!value) {
         return '--';
     }
+
     return new Date(value).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -103,12 +102,11 @@ function formatDateTime(value?: string | null): string {
 
                     <!-- Pagination -->
                     <div
-                        v-if="logs.last_page > 1"
+                        v-if="logs.prev_page_url || logs.next_page_url"
                         class="flex items-center justify-between border-t border-sidebar-border/70 px-4 py-3"
                     >
                         <p class="text-sm text-muted-foreground">
-                            Page {{ logs.current_page }} of {{ logs.last_page }}
-                            ({{ logs.total }} logs)
+                            Page {{ logs.current_page }}
                         </p>
                         <div class="flex gap-2">
                             <Button
@@ -120,12 +118,28 @@ function formatDateTime(value?: string | null): string {
                                 <Link :href="logs.prev_page_url" preserve-scroll>Previous</Link>
                             </Button>
                             <Button
+                                v-else
+                                variant="outline"
+                                size="sm"
+                                disabled
+                            >
+                                Previous
+                            </Button>
+                            <Button
                                 v-if="logs.next_page_url"
                                 variant="outline"
                                 size="sm"
                                 as-child
                             >
                                 <Link :href="logs.next_page_url" preserve-scroll>Next</Link>
+                            </Button>
+                            <Button
+                                v-else
+                                variant="outline"
+                                size="sm"
+                                disabled
+                            >
+                                Next
                             </Button>
                         </div>
                     </div>
