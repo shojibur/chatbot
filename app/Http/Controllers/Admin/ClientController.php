@@ -204,7 +204,7 @@ class ClientController extends Controller
         $client->load('plan');
 
         $entries = $client->conversationCaches()
-            ->latest('last_accessed_at')
+            ->latest('last_hit_at')
             ->paginate(50);
 
         return Inertia::render('clients/CacheEntries', [
