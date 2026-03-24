@@ -16,6 +16,16 @@ class KnowledgeChunk extends Model
     use HasNeighbors;
 
     /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'embedding',
+        'embedding_vector',
+    ];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

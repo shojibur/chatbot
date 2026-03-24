@@ -87,6 +87,7 @@ class ClientController extends Controller
             'knowledgeSources' => fn ($query) => $query->latest(),
             'usageLogs' => fn ($query) => $query->latest()->limit(25),
             'conversationCaches' => fn ($query) => $query
+                ->select(['id', 'client_id', 'question', 'answer', 'hit_count', 'total_tokens_saved', 'last_hit_at', 'expires_at', 'created_at'])
                 ->orderByDesc('last_hit_at')
                 ->orderByDesc('id')
                 ->limit(20),

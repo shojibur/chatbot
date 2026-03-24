@@ -13,6 +13,16 @@ class ConversationCache extends Model
     use HasFactory;
 
     /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'question_embedding',
+        'question_embedding_vector',
+    ];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
