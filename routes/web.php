@@ -8,6 +8,66 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+// Temporary debug route — remove after diagnosing 502
+Route::get('debug/client/{client}', function (App\Models\Client $client) {
+    $steps = [];
+
+    try {
+        $steps['client_loaded'] = $client->name;
+    } catch (\Throwable $e) {
+        $steps['client_error'] = $e->getMessage();
+    }
+
+    try {
+        $client->load('plan');
+        $steps['plan_loaded'] = $client->plan?->name ?? 'no plan';
+    } catch (\Throwable $e) {
+        $steps['plan_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['knowledge_sources_count'] = $client->knowledgeSources()->count();
+    } catch (\Throwable $e) {
+        $steps['knowledge_sources_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['usage_logs_count'] = $client->usageLogs()->count();
+    } catch (\Throwable $e) {
+        $steps['usage_logs_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['conversation_caches_count'] = $client->conversationCaches()->count();
+    } catch (\Throwable $e) {
+        $steps['conversation_caches_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['knowledge_chunks_count'] = $client->knowledgeChunks()->count();
+    } catch (\Throwable $e) {
+        $steps['knowledge_chunks_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['chat_sessions_count'] = $client->chatSessions()->count();
+    } catch (\Throwable $e) {
+        $steps['chat_sessions_error'] = $e->getMessage();
+    }
+
+    try {
+        $steps['inertia_ssr_enabled'] = config('inertia.ssr.enabled');
+    } catch (\Throwable $e) {
+        $steps['config_error'] = $e->getMessage();
+    }
+
+    $steps['php_memory_limit'] = ini_get('memory_limit');
+    $steps['php_version'] = PHP_VERSION;
+    $steps['memory_used_mb'] = round(memory_get_peak_usage(true) / 1024 / 1024, 1);
+
+    return response()->json($steps);
+})->middleware('auth');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
