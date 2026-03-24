@@ -20,6 +20,9 @@ class ChatRequest extends FormRequest
             'client_code' => ['required', 'string', 'max:100'],
             'message' => ['required', 'string', 'max:4000'],
             'session_id' => ['nullable', 'string', 'max:100'],
+            'session_token' => ['nullable', 'string', 'max:64'],
+            'page_url' => ['nullable', 'string', 'max:2000'],
+            'visitor_id' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

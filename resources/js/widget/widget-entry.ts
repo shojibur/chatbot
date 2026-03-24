@@ -3,9 +3,13 @@ import ChatWidget from './ChatWidget.vue';
 import widgetStyles from './widget-styles.css?inline';
 
 (function () {
-  const script = document.currentScript as HTMLScriptElement | null;
+  // Support both sync and async loading by finding our script tag
+  const script =
+    document.currentScript as HTMLScriptElement | null ??
+    document.querySelector('script[data-client-code]') as HTMLScriptElement | null;
+
   if (!script) {
-    console.error('[Davey] Widget script must be loaded synchronously (not async/defer/module).');
+    console.error('[Davey] Could not find widget script tag. Ensure it has a data-client-code attribute.');
     return;
   }
 

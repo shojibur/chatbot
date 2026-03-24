@@ -207,7 +207,7 @@ function executeDeleteClient() {
 
 const embedSnippet = computed(
     () =>
-        `<script src="${props.widget_script_url}" data-client="${props.client.unique_code}" async><\/script>`,
+        `<script src="${props.widget_script_url}" data-client-code="${props.client.unique_code}" async><\/script>`,
 );
 
 function formatDate(value?: string | null): string {

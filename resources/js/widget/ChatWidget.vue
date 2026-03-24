@@ -101,7 +101,7 @@ const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
 const messages = ref<Message[]>([]);
-const sessionId = ref(crypto.randomUUID());
+const sessionToken = ref<string | null>(null);
 
 const primaryColor = computed(() => props.config.widget_settings?.primary_color || '#6366f1');
 const accentColor = computed(() => props.config.widget_settings?.accent_color || '#8b5cf6');
@@ -128,20 +128,32 @@ async function send() {
   scrollToBottom();
 
   try {
+    const body: Record<string, string> = {
+      client_code: props.clientCode,
+      message: text,
+      page_url: window.location.href,
+    };
+
+    // Send session_token on subsequent messages so they group into the same session
+    if (sessionToken.value) {
+      body.session_token = sessionToken.value;
+    }
+
     const res = await fetch(`${props.apiBase}/api/v1/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        client_code: props.clientCode,
-        message: text,
-        session_id: sessionId.value,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();
 
     if (res.ok && data.answer) {
       messages.value.push({ role: 'assistant', content: data.answer });
+
+      // Store session_token from server so all messages in this conversation are linked
+      if (data.session_token) {
+        sessionToken.value = data.session_token;
+      }
     } else {
       messages.value.push({
         role: 'assistant',
@@ -167,4 +179,3 @@ function scrollToBottom() {
   });
 }
 </script>
-

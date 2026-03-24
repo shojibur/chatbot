@@ -140,7 +140,7 @@ class ClientController extends Controller
                 'expires_at' => $cache->expires_at?->toDateTimeString(),
             ]),
             'knowledge_source_types' => KnowledgeSource::SOURCE_TYPES,
-            'widget_script_url' => url('/widget.js'),
+            'widget_script_url' => url('/widget/widget.js'),
             'status' => $request->session()->get('status'),
         ]);
     }
