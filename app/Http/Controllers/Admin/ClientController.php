@@ -116,7 +116,7 @@ class ClientController extends Controller
                 'saved_tokens' => (int) $client->conversationCaches()->sum('total_tokens_saved'),
             ],
             'knowledge_source_types' => KnowledgeSource::SOURCE_TYPES,
-            'widget_script_url' => url('/widget/widget.js'),
+            'widget_script_url' => url('/widget/widget.js').'?v='.(file_exists(public_path('widget/widget.js')) ? filemtime(public_path('widget/widget.js')) : time()),
             'status' => $request->session()->get('status'),
         ]);
     }
@@ -262,6 +262,8 @@ class ClientController extends Controller
     {
         $client->update($this->payload($request));
 
+        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
+
         return to_route('clients.show', $client)->with('status', 'client-updated');
     }
 
@@ -270,6 +272,8 @@ class ClientController extends Controller
      */
     public function destroy(Client $client): RedirectResponse
     {
+        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
+        
         $client->delete();
 
         return to_route('clients.index')->with('status', 'client-deleted');

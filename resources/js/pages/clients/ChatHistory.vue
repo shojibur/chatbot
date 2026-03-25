@@ -98,8 +98,8 @@ watch(
 
 const currentMessages = computed(() => {
     if (!selectedSessionId.value) {
-return [];
-}
+        return [];
+    }
 
     return loadedMessages.value[selectedSessionId.value] || [];
 });

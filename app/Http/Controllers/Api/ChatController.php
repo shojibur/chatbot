@@ -149,20 +149,30 @@ class ChatController extends Controller
      */
     public function widgetConfig(string $clientCode): JsonResponse
     {
-        $client = Client::where('unique_code', $clientCode)
-            ->where('status', 'active')
-            ->first();
+        $cacheKey = "widget_config_{$clientCode}";
 
-        if (! $client) {
+        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addDay(), function () use ($clientCode) {
+            $client = Client::where('unique_code', $clientCode)
+                ->where('status', 'active')
+                ->first();
+
+            if (! $client) {
+                return null;
+            }
+
+            return [
+                'name' => $client->name,
+                'widget_style' => $client->widget_style,
+                'widget_settings' => $client->widget_settings,
+                'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
+            ];
+        });
+
+        if (! $data) {
             return response()->json(['error' => 'Client not found.'], 404);
         }
 
-        return response()->json([
-            'name' => $client->name,
-            'widget_style' => $client->widget_style,
-            'widget_settings' => $client->widget_settings,
-            'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
-        ]);
+        return response()->json($data)->header('Cache-Control', 'public, max-age=300');
     }
 
     private function buildSystemPrompt(Client $client, string $context): string
