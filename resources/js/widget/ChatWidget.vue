@@ -3,9 +3,19 @@
         :class="['davey-widget', `davey-${config.widget_style}`]"
         :style="positionStyle"
     >
-        <!-- Toggle Button -->
+        <!-- Modern Style Pill -->
         <button
-            v-if="!isOpen"
+            v-if="!isOpen && config.widget_style === 'modern'"
+            class="davey-toggle-pill"
+            @click="isOpen = true"
+        >
+            <div class="davey-pill-dot" :style="{ background: accentColor }"></div>
+            <span class="davey-pill-text">Ask anything about this business</span>
+        </button>
+
+        <!-- Classic & Glass Toggle Button -->
+        <button
+            v-else-if="!isOpen"
             class="davey-toggle"
             :style="{ background: primaryColor }"
             @click="isOpen = true"
