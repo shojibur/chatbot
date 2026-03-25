@@ -374,13 +374,9 @@ const interactionLabels: Record<string, string> = {
                                     <p
                                         class="mt-0.5 text-xs text-muted-foreground"
                                     >
-                                        {{
-                                            client.knowledge_sources_count
-                                        }}
+                                        {{ client.knowledge_sources_count }}
                                         sources &middot;
-                                        {{
-                                            fmt(client.current_month_tokens)
-                                        }}
+                                        {{ fmt(client.current_month_tokens) }}
                                         tokens this month
                                     </p>
                                 </div>

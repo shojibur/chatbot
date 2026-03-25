@@ -399,9 +399,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                     </CardHeader>
                     <CardContent>
                         <p class="text-2xl font-semibold tracking-tight">
-                            {{
-                                memory_summary.chunk_count.toLocaleString()
-                            }}
+                            {{ memory_summary.chunk_count.toLocaleString() }}
                             chunks
                         </p>
                         <p class="mt-0.5 text-xs text-muted-foreground">
@@ -418,16 +416,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                     </CardHeader>
                     <CardContent>
                         <p class="text-2xl font-semibold tracking-tight">
-                            {{
-                                memory_summary.cache_entries.toLocaleString()
-                            }}
+                            {{ memory_summary.cache_entries.toLocaleString() }}
                             entries
                         </p>
                         <p class="mt-0.5 text-xs text-muted-foreground">
                             {{ memory_summary.cache_hits }} hits &middot;
-                            {{
-                                memory_summary.saved_tokens.toLocaleString()
-                            }}
+                            {{ memory_summary.saved_tokens.toLocaleString() }}
                             tokens saved
                         </p>
                     </CardContent>

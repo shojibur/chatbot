@@ -117,9 +117,7 @@ function formatDateTime(value?: string | null): string {
                             </div>
                             <div class="shrink-0 text-right">
                                 <p class="text-sm tabular-nums">
-                                    {{
-                                        log.total_tokens.toLocaleString()
-                                    }}
+                                    {{ log.total_tokens.toLocaleString() }}
                                     tokens
                                 </p>
                                 <p class="text-xs text-muted-foreground">

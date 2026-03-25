@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import axios from 'axios';
 import {
     ArrowLeft,
     Clock,
@@ -10,7 +11,7 @@ import {
     Zap,
     MessageSquare,
 } from 'lucide-vue-next';
-import { ref, computed } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -52,6 +53,55 @@ const selectedSession = computed(() => {
         props.sessions.data.find((s) => s.id === selectedSessionId.value) ||
         null
     );
+});
+
+const loadedMessages = ref<Record<number, any[]>>({});
+const isLoadingMessages = ref(false);
+const messagesContainer = ref<HTMLElement | null>(null);
+
+watch(
+    selectedSessionId,
+    async (newId) => {
+        if (newId && !loadedMessages.value[newId]) {
+            isLoadingMessages.value = true;
+
+            try {
+                const res = await axios.get(
+                    `/clients/${props.client.id}/chat-history/${newId}/messages`,
+                );
+                loadedMessages.value[newId] = res.data.messages;
+
+                // Scroll to bottom after load
+                nextTick(() => {
+                    if (messagesContainer.value) {
+                        messagesContainer.value.scrollTop =
+                            messagesContainer.value.scrollHeight;
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to load session messages', e);
+            } finally {
+                isLoadingMessages.value = false;
+            }
+        } else if (newId) {
+            // Scroll to bottom if already cached
+            nextTick(() => {
+                if (messagesContainer.value) {
+                    messagesContainer.value.scrollTop =
+                        messagesContainer.value.scrollHeight;
+                }
+            });
+        }
+    },
+    { immediate: true },
+);
+
+const currentMessages = computed(() => {
+    if (!selectedSessionId.value) {
+return [];
+}
+
+    return loadedMessages.value[selectedSessionId.value] || [];
 });
 
 function formatDateTime(value?: string | null): string {
@@ -140,7 +190,7 @@ function truncateUserAgent(ua?: string | null): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div
-            class="flex flex-1 flex-col gap-6 p-4 md:h-[calc(100vh-4rem)] md:p-6"
+            class="flex h-[calc(100vh-6rem)] min-h-[500px] flex-col gap-4 p-4 md:p-6 md:pb-8"
         >
             <!-- Header -->
             <div
@@ -164,7 +214,7 @@ function truncateUserAgent(ua?: string | null): string {
             </div>
 
             <div
-                class="flex min-h-[600px] flex-1 flex-col overflow-hidden rounded-xl border border-sidebar-border/70 bg-card md:min-h-0 md:flex-row"
+                class="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sidebar-border/70 bg-card md:flex-row"
             >
                 <!-- Sidebar (List) -->
                 <div
@@ -230,8 +280,8 @@ function truncateUserAgent(ua?: string | null): string {
                                     class="w-full truncate pr-4 text-xs text-muted-foreground"
                                 >
                                     {{
-                                        session.messages.length > 0
-                                            ? session.messages[0].content
+                                        session.first_message
+                                            ? session.first_message
                                             : 'Empty session'
                                     }}
                                 </div>
@@ -355,10 +405,20 @@ function truncateUserAgent(ua?: string | null): string {
 
                         <!-- Chat Messages Container -->
                         <div
+                            ref="messagesContainer"
                             class="flex-1 space-y-6 overflow-y-auto p-4 md:p-6"
                         >
                             <div
-                                v-for="message in selectedSession.messages"
+                                v-if="isLoadingMessages"
+                                class="flex h-full items-center justify-center"
+                            >
+                                <span class="text-sm text-muted-foreground"
+                                    >Loading messages...</span
+                                >
+                            </div>
+                            <div
+                                v-else
+                                v-for="message in currentMessages"
                                 :key="message.id"
                                 class="flex w-full"
                                 :class="
@@ -439,7 +499,10 @@ function truncateUserAgent(ua?: string | null): string {
                             </div>
 
                             <div
-                                v-if="selectedSession.messages.length === 0"
+                                v-if="
+                                    !isLoadingMessages &&
+                                    currentMessages.length === 0
+                                "
                                 class="flex h-full items-center justify-center text-sm text-muted-foreground"
                             >
                                 No messages logged for this session.

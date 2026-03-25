@@ -188,4 +188,5 @@ export type ChatSessionRecord = {
     last_activity_at: string | null;
     created_at: string | null;
     messages: ChatMessageRecord[];
+    first_message?: string;
 };

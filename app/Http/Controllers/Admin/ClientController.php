@@ -142,7 +142,12 @@ class ClientController extends Controller
         $client->load('plan');
 
         $sessions = $client->chatSessions()
-            ->with(['messages' => fn ($query) => $query->orderBy('created_at')])
+            ->addSelect([
+                'first_message' => \App\Models\ChatMessage::select('content')
+                    ->whereColumn('chat_session_id', 'chat_sessions.id')
+                    ->oldest('created_at')
+                    ->limit(1)
+            ])
             ->orderByDesc('last_activity_at')
             ->simplePaginate(20);
 
@@ -159,16 +164,32 @@ class ClientController extends Controller
                 'total_tokens' => $session->total_tokens,
                 'last_activity_at' => $session->last_activity_at?->toDateTimeString(),
                 'created_at' => $session->created_at?->toDateTimeString(),
-                'messages' => $session->messages->map(fn ($message): array => [
-                    'id' => $message->id,
-                    'role' => $message->role,
-                    'content' => $message->content,
-                    'token_count' => $message->token_count,
-                    'from_cache' => $message->from_cache,
-                    'created_at' => $message->created_at?->toDateTimeString(),
-                ]),
+                'first_message' => $session->first_message,
+                'messages' => [], // Messages will be loaded lazily
             ]),
         ]);
+    }
+
+    /**
+     * Get the messages for a specific chat session (lazy loaded API endpoint).
+     */
+    public function chatSessionMessages(Request $request, Client $client, ChatSession $session): \Illuminate\Http\JsonResponse
+    {
+        if ($session->client_id !== $client->id) {
+            abort(404);
+        }
+
+        $messages = $session->messages()->orderBy('created_at')->get()
+            ->map(fn ($message): array => [
+                'id' => $message->id,
+                'role' => $message->role,
+                'content' => $message->content,
+                'token_count' => $message->token_count,
+                'from_cache' => $message->from_cache,
+                'created_at' => $message->created_at?->toDateTimeString(),
+            ]);
+
+        return response()->json(['messages' => $messages]);
     }
 
     /**

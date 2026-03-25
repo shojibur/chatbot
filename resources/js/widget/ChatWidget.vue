@@ -177,8 +177,8 @@ marked.setOptions({
 
 function parseMessage(text: string) {
     if (!text) {
-return '';
-}
+        return '';
+    }
 
     const rawHtml = marked.parse(text) as string;
 
@@ -218,8 +218,8 @@ async function send() {
     const text = input.value.trim();
 
     if (!text || loading.value) {
-return;
-}
+        return;
+    }
 
     messages.value.push({ role: 'user', content: text });
     input.value = '';
