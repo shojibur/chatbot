@@ -10,6 +10,7 @@ use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\RetrievalService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use OpenAI\Laravel\Facades\OpenAI;
 
 class ChatController extends Controller
@@ -28,6 +29,10 @@ class ChatController extends Controller
 
         if (! $client) {
             return response()->json(['error' => 'Client not found or inactive.'], 404);
+        }
+
+        if (! $this->verifyDomainAccess($request, $client)) {
+            return response()->json(['error' => 'Domain not authorized to use this widget.'], 403);
         }
 
         // Check monthly token limit
@@ -147,7 +152,7 @@ class ChatController extends Controller
     /**
      * Return widget configuration for a client (public endpoint).
      */
-    public function widgetConfig(string $clientCode): JsonResponse
+    public function widgetConfig(Request $request, string $clientCode): JsonResponse
     {
         $cacheKey = "widget_config_{$clientCode}";
 
@@ -165,12 +170,22 @@ class ChatController extends Controller
                 'widget_style' => $client->widget_style,
                 'widget_settings' => $client->widget_settings,
                 'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
+                'allowed_domains' => $client->allowed_domains,
             ];
         });
 
         if (! $data) {
             return response()->json(['error' => 'Client not found.'], 404);
         }
+
+        $clientStub = new Client();
+        $clientStub->allowed_domains = $data['allowed_domains'] ?? [];
+        
+        if (! $this->verifyDomainAccess($request, $clientStub)) {
+            return response()->json(['error' => 'Domain not authorized to load this widget.'], 403);
+        }
+        
+        unset($data['allowed_domains']);
 
         return response()->json($data)->header('Cache-Control', 'public, max-age=300');
     }
@@ -205,5 +220,44 @@ class ChatController extends Controller
             ($promptTokens / 1_000_000) * $inputCost + ($completionTokens / 1_000_000) * $outputCost,
             6
         );
+    }
+
+    /**
+     * Prevent unauthorized domains from using the client's chatbot budget.
+     */
+    private function verifyDomainAccess(Request $request, Client $client): bool
+    {
+        if (empty($client->allowed_domains)) {
+            return true; // No domain restrictions configured
+        }
+
+        $origin = $request->headers->get('Origin') ?? $request->headers->get('Referer');
+        if (! $origin) {
+            // Block direct API calls (e.g. Postman/Curl) if domains are restricted
+            return false;
+        }
+
+        $host = parse_url($origin, PHP_URL_HOST);
+        if (! $host) {
+            return false;
+        }
+
+        $host = strtolower($host);
+
+        // Always allow the dashboard application itself to test the chatbot (Playground/Preview)
+        $appHost = strtolower(parse_url(config('app.url'), PHP_URL_HOST) ?? '');
+        if ($host === $appHost || $host === 'localhost' || $host === '127.0.0.1') {
+            return true;
+        }
+
+        $allowed = array_map(fn ($d) => strtolower(trim($d)), $client->allowed_domains);
+
+        foreach ($allowed as $domain) {
+            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
