@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { login } from '@/routes';
 import { ref } from 'vue';
+import { login } from '@/routes';
 
 const showContactModal = ref(false);
 </script>
@@ -39,7 +39,7 @@ const showContactModal = ref(false);
                     </svg>
                 </div>
                 <span class="text-xl font-bold tracking-tight"
-                    >HawaiiChatBot</span
+                    >Zaochat</span
                 >
             </div>
 
@@ -101,7 +101,7 @@ const showContactModal = ref(false);
                     <p
                         class="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg"
                     >
-                        HawaiiChatBot learns from your documents and website to
+                        Zaochat learns from your documents and website to
                         answer customer questions 24/7. Reduce support tickets,
                         delight customers, and free up your team.
                     </p>
@@ -648,7 +648,7 @@ const showContactModal = ref(false);
                                 />
                             </svg>
                         </div>
-                        <span class="text-sm font-semibold">HawaiiChatBot</span>
+                        <span class="text-sm font-semibold">Zaochat</span>
                     </div>
                     <div class="flex items-center gap-6">
                         <a
@@ -659,7 +659,7 @@ const showContactModal = ref(false);
                         </a>
                     </div>
                     <p class="text-sm text-slate-500">
-                        &copy; {{ new Date().getFullYear() }} HawaiiChatBot. All
+                        &copy; {{ new Date().getFullYear() }} Zaochat. All
                         rights reserved.
                     </p>
                 </div>
@@ -738,7 +738,7 @@ const showContactModal = ref(false);
                                 </div>
 
                                 <h3 class="text-xl font-bold text-white">
-                                    Get Started with HawaiiChatBot
+                                    Get Started with Zaochat
                                 </h3>
                                 <p class="mt-2 text-sm text-slate-400">
                                     Reach out to us and we'll set up your custom
@@ -784,7 +784,7 @@ const showContactModal = ref(false);
 
                                 <!-- Website -->
                                 <a
-                                    href="mailto:info@thehawaiiagency.com?subject=HawaiiChatBot%20Inquiry"
+                                    href="mailto:info@thehawaiiagency.com?subject=Zaochat%20Inquiry"
                                     class="flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.03] p-4 transition hover:border-blue-500/20 hover:bg-white/[0.06]"
                                 >
                                     <div
