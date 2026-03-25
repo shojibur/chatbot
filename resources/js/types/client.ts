@@ -35,6 +35,7 @@ export type WidgetSettings = {
     primary_color: string;
     accent_color: string;
     welcome_message: string;
+    toggle_text?: string;
     position: string;
     show_branding: boolean;
 };
@@ -79,6 +80,7 @@ export type ClientFormRecord = {
     primary_color: string;
     accent_color: string;
     welcome_message: string;
+    toggle_text: string;
     position: string;
     show_branding: boolean;
     notes: string;

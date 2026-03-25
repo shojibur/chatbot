@@ -568,6 +568,17 @@ function submit(): void {
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
+                            <Label for="toggle_text">Pill toggle text (Modern style)</Label>
+                            <Input
+                                id="toggle_text"
+                                v-model="form.toggle_text"
+                                placeholder="Ask anything about this business"
+                                maxlength="50"
+                            />
+                            <InputError :message="form.errors.toggle_text" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
                             <Label class="text-sm">Branding</Label>
                             <label
                                 class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
@@ -658,9 +669,7 @@ function submit(): void {
                                             background: form.accent_color,
                                         }"
                                     ></div>
-                                    <span class="text-sm text-slate-700"
-                                        >Ask anything about this business</span
-                                    >
+                                    <span class="text-sm text-slate-700">{{ form.toggle_text || 'Ask anything about this business' }}</span>
                                 </div>
                             </div>
 

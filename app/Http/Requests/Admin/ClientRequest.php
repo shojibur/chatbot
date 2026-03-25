@@ -44,6 +44,7 @@ abstract class ClientRequest extends FormRequest
             'primary_color' => ['required', 'regex:/^#[A-Fa-f0-9]{6}$/'],
             'accent_color' => ['required', 'regex:/^#[A-Fa-f0-9]{6}$/'],
             'welcome_message' => ['required', 'string', 'max:500'],
+            'toggle_text' => ['required', 'string', 'max:50'],
             'position' => ['required', Rule::in(Client::WIDGET_POSITIONS)],
             'show_branding' => ['required', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],

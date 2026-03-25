@@ -10,7 +10,7 @@
             @click="isOpen = true"
         >
             <div class="davey-pill-dot" :style="{ background: accentColor }"></div>
-            <span class="davey-pill-text">Ask anything about this business</span>
+            <span class="davey-pill-text">{{ config.widget_settings?.toggle_text || 'Ask anything about this business' }}</span>
         </button>
 
         <!-- Classic & Glass Toggle Button -->
@@ -131,6 +131,7 @@ interface WidgetConfig {
         primary_color?: string;
         accent_color?: string;
         welcome_message?: string;
+        toggle_text?: string;
         position?: string;
         show_branding?: boolean;
     };
