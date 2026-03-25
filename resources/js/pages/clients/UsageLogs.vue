@@ -39,7 +39,9 @@ function formatDateTime(value?: string | null): string {
         return '--';
     }
 
-    return new Date(value).toLocaleString(undefined, {
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
+    return new Date(dateStr).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

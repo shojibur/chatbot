@@ -34,18 +34,23 @@ function formatDate(value?: string | null): string {
         return '--';
     }
 
-    return new Date(value).toLocaleDateString(undefined, {
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
+    return new Date(dateStr).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
     });
 }
+
 function formatDateTime(value?: string | null): string {
     if (!value) {
         return '--';
     }
 
-    return new Date(value).toLocaleString(undefined, {
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
+    return new Date(dateStr).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

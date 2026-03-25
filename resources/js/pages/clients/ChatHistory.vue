@@ -50,7 +50,9 @@ function formatDateTime(value?: string | null): string {
         return '--';
     }
 
-    return new Date(value).toLocaleString(undefined, {
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
+    return new Date(dateStr).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -59,12 +61,49 @@ function formatDateTime(value?: string | null): string {
     });
 }
 
+function formatRelativeTime(value?: string | null): string {
+    if (!value) {
+        return '--';
+    }
+
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) {
+        return 'Just now';
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+
+    if (diffInMinutes < 60) {
+        return `${diffInMinutes}m ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+
+    if (diffInHours < 24) {
+        return `${diffInHours}h ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInDays < 7) {
+        return `${diffInDays}d ago`;
+    }
+    
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 function formatTimeOnly(value?: string | null): string {
     if (!value) {
         return '--';
     }
 
-    return new Date(value).toLocaleTimeString(undefined, {
+    const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
+    return new Date(dateStr).toLocaleTimeString(undefined, {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -135,7 +174,7 @@ function truncateUserAgent(ua?: string | null): string {
                                             <span v-if="session.visitor_ip" class="ml-2 text-xs text-muted-foreground">{{ session.visitor_ip }}</span>
                                         </div>
                                     </div>
-                                    <span class="text-xs text-muted-foreground whitespace-nowrap">{{ session.created_at ? new Date(session.created_at).toLocaleDateString() : '--' }}</span>
+                                    <span class="text-[10px] text-muted-foreground whitespace-nowrap">{{ formatRelativeTime(session.created_at) }}</span>
                                 </div>
                                 <div class="text-xs text-muted-foreground truncate w-full pr-4">
                                     {{ session.messages.length > 0 ? session.messages[0].content : 'Empty session' }}
