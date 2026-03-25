@@ -9,3 +9,10 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('chat:prune')->daily()->at('03:00');
+
+Schedule::call(function () {
+    \App\Models\Client::onlyTrashed()
+        ->where('deleted_at', '<=', now()->subDays(7))
+        ->cursor()
+        ->each(fn ($client) => $client->forceDelete());
+})->daily()->at('04:00')->name('clients:prune-deleted');

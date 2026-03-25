@@ -1104,7 +1104,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
         <ConfirmDeleteDialog
             :open="showDeleteClient"
             :title="`Delete ${client.name}?`"
-            description="This will permanently delete the client and all associated knowledge sources, usage logs, and cache entries. This action cannot be undone."
+            description="This will schedule the client for deletion in 7 days. Knowledge sources and API access will be deactivated immediately, and all data will be permanently wiped unconditionally after 7 days."
             :processing="deletingClient"
             @close="showDeleteClient = false"
             @confirm="executeDeleteClient"
