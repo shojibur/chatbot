@@ -2,7 +2,13 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,7 +67,9 @@ function removeFeature(index: number) {
                     <ArrowLeft class="h-4 w-4" />
                 </Link>
                 <div>
-                    <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    <h1
+                        class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+                    >
                         Edit {{ plan.name }}
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -75,7 +83,9 @@ function removeFeature(index: number) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Plan details</CardTitle>
-                        <CardDescription>Name, description, and pricing.</CardDescription>
+                        <CardDescription
+                            >Name, description, and pricing.</CardDescription
+                        >
                     </CardHeader>
                     <CardContent class="space-y-4">
                         <div class="grid gap-4 sm:grid-cols-2">
@@ -86,12 +96,17 @@ function removeFeature(index: number) {
                                     v-model="form.name"
                                     placeholder="e.g. Pro"
                                 />
-                                <p v-if="form.errors.name" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.name"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.name }}
                                 </p>
                             </div>
                             <div class="space-y-2">
-                                <Label for="price_monthly">Price / month ($)</Label>
+                                <Label for="price_monthly"
+                                    >Price / month ($)</Label
+                                >
                                 <Input
                                     id="price_monthly"
                                     v-model.number="form.price_monthly"
@@ -99,7 +114,10 @@ function removeFeature(index: number) {
                                     min="0"
                                     step="0.01"
                                 />
-                                <p v-if="form.errors.price_monthly" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.price_monthly"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.price_monthly }}
                                 </p>
                             </div>
@@ -110,10 +128,13 @@ function removeFeature(index: number) {
                                 id="description"
                                 v-model="form.description"
                                 rows="2"
-                                class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-gray-400 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-100 dark:focus:ring-gray-100"
+                                class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-gray-400 focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-100 dark:focus:ring-gray-100"
                                 placeholder="Short description of the plan"
                             />
-                            <p v-if="form.errors.description" class="text-sm text-red-600">
+                            <p
+                                v-if="form.errors.description"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.description }}
                             </p>
                         </div>
@@ -121,10 +142,15 @@ function removeFeature(index: number) {
                             <Checkbox
                                 id="is_active"
                                 :checked="form.is_active"
-                                @update:checked="form.is_active = $event as boolean"
+                                @update:checked="
+                                    form.is_active = $event as boolean
+                                "
                             />
                             <Label for="is_active">Active</Label>
-                            <p v-if="form.errors.is_active" class="text-sm text-red-600">
+                            <p
+                                v-if="form.errors.is_active"
+                                class="text-sm text-red-600"
+                            >
                                 {{ form.errors.is_active }}
                             </p>
                         </div>
@@ -135,55 +161,78 @@ function removeFeature(index: number) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Limits</CardTitle>
-                        <CardDescription>Token, message, and storage allowances.</CardDescription>
+                        <CardDescription
+                            >Token, message, and storage
+                            allowances.</CardDescription
+                        >
                     </CardHeader>
                     <CardContent>
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div class="space-y-2">
-                                <Label for="monthly_token_limit">Monthly token limit</Label>
+                                <Label for="monthly_token_limit"
+                                    >Monthly token limit</Label
+                                >
                                 <Input
                                     id="monthly_token_limit"
                                     v-model.number="form.monthly_token_limit"
                                     type="number"
                                     min="0"
                                 />
-                                <p v-if="form.errors.monthly_token_limit" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.monthly_token_limit"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.monthly_token_limit }}
                                 </p>
                             </div>
                             <div class="space-y-2">
-                                <Label for="monthly_message_limit">Monthly message limit</Label>
+                                <Label for="monthly_message_limit"
+                                    >Monthly message limit</Label
+                                >
                                 <Input
                                     id="monthly_message_limit"
                                     v-model.number="form.monthly_message_limit"
                                     type="number"
                                     min="0"
                                 />
-                                <p v-if="form.errors.monthly_message_limit" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.monthly_message_limit"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.monthly_message_limit }}
                                 </p>
                             </div>
                             <div class="space-y-2">
-                                <Label for="max_knowledge_sources">Max knowledge sources</Label>
+                                <Label for="max_knowledge_sources"
+                                    >Max knowledge sources</Label
+                                >
                                 <Input
                                     id="max_knowledge_sources"
                                     v-model.number="form.max_knowledge_sources"
                                     type="number"
                                     min="1"
                                 />
-                                <p v-if="form.errors.max_knowledge_sources" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.max_knowledge_sources"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.max_knowledge_sources }}
                                 </p>
                             </div>
                             <div class="space-y-2">
-                                <Label for="max_file_upload_mb">Max file upload (MB)</Label>
+                                <Label for="max_file_upload_mb"
+                                    >Max file upload (MB)</Label
+                                >
                                 <Input
                                     id="max_file_upload_mb"
                                     v-model.number="form.max_file_upload_mb"
                                     type="number"
                                     min="1"
                                 />
-                                <p v-if="form.errors.max_file_upload_mb" class="text-sm text-red-600">
+                                <p
+                                    v-if="form.errors.max_file_upload_mb"
+                                    class="text-sm text-red-600"
+                                >
                                     {{ form.errors.max_file_upload_mb }}
                                 </p>
                             </div>
@@ -195,7 +244,10 @@ function removeFeature(index: number) {
                 <Card>
                     <CardHeader>
                         <CardTitle>Features</CardTitle>
-                        <CardDescription>Bullet points shown on the plan card.</CardDescription>
+                        <CardDescription
+                            >Bullet points shown on the plan
+                            card.</CardDescription
+                        >
                     </CardHeader>
                     <CardContent class="space-y-3">
                         <div
@@ -236,10 +288,7 @@ function removeFeature(index: number) {
                     >
                         Cancel
                     </Link>
-                    <Button
-                        type="submit"
-                        :disabled="form.processing"
-                    >
+                    <Button type="submit" :disabled="form.processing">
                         {{ form.processing ? 'Saving...' : 'Save changes' }}
                     </Button>
                 </div>

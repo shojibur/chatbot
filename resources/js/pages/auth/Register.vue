@@ -19,7 +19,8 @@ import { login } from '@/routes';
         <Head title="Register" />
 
         <Form
-            method="post" action="/register"
+            method="post"
+            action="/register"
             :reset-on-success="['password', 'password_confirmation']"
             v-slot="{ errors, processing }"
             class="flex flex-col gap-6"

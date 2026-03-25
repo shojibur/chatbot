@@ -36,10 +36,18 @@ defineEmits<{
                 </DialogDescription>
             </DialogHeader>
             <DialogFooter class="gap-2 sm:gap-0">
-                <Button variant="outline" @click="$emit('close')" :disabled="processing">
+                <Button
+                    variant="outline"
+                    @click="$emit('close')"
+                    :disabled="processing"
+                >
                     Cancel
                 </Button>
-                <Button variant="destructive" @click="$emit('confirm')" :disabled="processing">
+                <Button
+                    variant="destructive"
+                    @click="$emit('confirm')"
+                    :disabled="processing"
+                >
                     {{ processing ? 'Deleting...' : 'Delete' }}
                 </Button>
             </DialogFooter>

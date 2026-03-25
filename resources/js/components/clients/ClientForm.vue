@@ -277,9 +277,7 @@ function submit(): void {
                                     </p>
                                 </div>
                                 <Badge variant="outline">
-                                    {{
-                                        selectedPlan.max_knowledge_sources
-                                    }}
+                                    {{ selectedPlan.max_knowledge_sources }}
                                     sources /
                                     {{ selectedPlan.max_file_upload_mb }} MB
                                     files

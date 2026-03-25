@@ -5,7 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
-import type { BreadcrumbItem, ClientWorkspace, CacheEntryRecord } from '@/types';
+import type {
+    BreadcrumbItem,
+    ClientWorkspace,
+    CacheEntryRecord,
+} from '@/types';
 
 type PaginatedEntries = {
     data: CacheEntryRecord[];
@@ -26,7 +30,10 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard() },
     { title: 'Clients', href: '/clients' },
     { title: props.client.name, href: `/clients/${props.client.id}` },
-    { title: 'Cache Entries', href: `/clients/${props.client.id}/cache-entries` },
+    {
+        title: 'Cache Entries',
+        href: `/clients/${props.client.id}/cache-entries`,
+    },
 ];
 
 function formatDate(value?: string | null): string {
@@ -65,9 +72,13 @@ function formatDateTime(value?: string | null): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-1 flex-col gap-6 p-4 md:p-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div>
-                    <h1 class="text-2xl font-semibold tracking-tight">Cache Entries</h1>
+                    <h1 class="text-2xl font-semibold tracking-tight">
+                        Cache Entries
+                    </h1>
                     <p class="mt-1 text-sm text-muted-foreground">
                         Cached responses for repeated questions.
                     </p>
@@ -85,7 +96,10 @@ function formatDateTime(value?: string | null): string {
                     <h2 class="text-lg font-semibold">Answer cache</h2>
                 </CardHeader>
                 <CardContent class="p-0">
-                    <div v-if="entries.data.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                    <div
+                        v-if="entries.data.length === 0"
+                        class="p-6 text-center text-sm text-muted-foreground"
+                    >
                         No cache entries yet.
                     </div>
                     <div v-else class="divide-y divide-sidebar-border/70">
@@ -94,13 +108,32 @@ function formatDateTime(value?: string | null): string {
                             :key="entry.id"
                             class="px-4 py-3"
                         >
-                            <p class="text-sm font-medium">{{ entry.question }}</p>
-                            <p class="mt-1 line-clamp-2 text-xs text-muted-foreground">{{ entry.answer }}</p>
-                            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <p class="text-sm font-medium">
+                                {{ entry.question }}
+                            </p>
+                            <p
+                                class="mt-1 line-clamp-2 text-xs text-muted-foreground"
+                            >
+                                {{ entry.answer }}
+                            </p>
+                            <div
+                                class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+                            >
                                 <span>{{ entry.hit_count }} hits</span>
-                                <span>{{ entry.total_tokens_saved.toLocaleString() }} tokens saved</span>
-                                <span v-if="entry.expires_at">Expires {{ formatDate(entry.expires_at) }}</span>
-                                <span>Cached on {{ formatDateTime(entry.created_at) }}</span>
+                                <span
+                                    >{{
+                                        entry.total_tokens_saved.toLocaleString()
+                                    }}
+                                    tokens saved</span
+                                >
+                                <span v-if="entry.expires_at"
+                                    >Expires
+                                    {{ formatDate(entry.expires_at) }}</span
+                                >
+                                <span
+                                    >Cached on
+                                    {{ formatDateTime(entry.created_at) }}</span
+                                >
                             </div>
                         </div>
                     </div>
@@ -120,14 +153,13 @@ function formatDateTime(value?: string | null): string {
                                 size="sm"
                                 as-child
                             >
-                                <Link :href="entries.prev_page_url" preserve-scroll>Previous</Link>
+                                <Link
+                                    :href="entries.prev_page_url"
+                                    preserve-scroll
+                                    >Previous</Link
+                                >
                             </Button>
-                            <Button
-                                v-else
-                                variant="outline"
-                                size="sm"
-                                disabled
-                            >
+                            <Button v-else variant="outline" size="sm" disabled>
                                 Previous
                             </Button>
                             <Button
@@ -136,14 +168,13 @@ function formatDateTime(value?: string | null): string {
                                 size="sm"
                                 as-child
                             >
-                                <Link :href="entries.next_page_url" preserve-scroll>Next</Link>
+                                <Link
+                                    :href="entries.next_page_url"
+                                    preserve-scroll
+                                    >Next</Link
+                                >
                             </Button>
-                            <Button
-                                v-else
-                                variant="outline"
-                                size="sm"
-                                disabled
-                            >
+                            <Button v-else variant="outline" size="sm" disabled>
                                 Next
                             </Button>
                         </div>

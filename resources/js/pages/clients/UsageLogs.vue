@@ -56,9 +56,13 @@ function formatDateTime(value?: string | null): string {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-1 flex-col gap-6 p-4 md:p-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div>
-                    <h1 class="text-2xl font-semibold tracking-tight">Usage Logs</h1>
+                    <h1 class="text-2xl font-semibold tracking-tight">
+                        Usage Logs
+                    </h1>
                     <p class="mt-1 text-sm text-muted-foreground">
                         Detailed API activity for {{ client.name }}.
                     </p>
@@ -76,7 +80,10 @@ function formatDateTime(value?: string | null): string {
                     <h2 class="text-lg font-semibold">Usage history</h2>
                 </CardHeader>
                 <CardContent class="p-0">
-                    <div v-if="logs.data.length === 0" class="p-6 text-center text-sm text-muted-foreground">
+                    <div
+                        v-if="logs.data.length === 0"
+                        class="p-6 text-center text-sm text-muted-foreground"
+                    >
                         No usage logs yet.
                     </div>
                     <div v-else class="divide-y divide-sidebar-border/70">
@@ -86,18 +93,38 @@ function formatDateTime(value?: string | null): string {
                             class="flex items-center justify-between gap-4 px-4 py-3"
                         >
                             <div class="min-w-0">
-                                <p class="truncate text-sm">{{ log.request_excerpt ?? 'No excerpt' }}</p>
-                                <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                    <Badge :variant="log.interaction_type === 'cache_hit' ? 'secondary' : 'outline'" class="text-[10px]">
+                                <p class="truncate text-sm">
+                                    {{ log.request_excerpt ?? 'No excerpt' }}
+                                </p>
+                                <div
+                                    class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                                >
+                                    <Badge
+                                        :variant="
+                                            log.interaction_type === 'cache_hit'
+                                                ? 'secondary'
+                                                : 'outline'
+                                        "
+                                        class="text-[10px]"
+                                    >
                                         {{ log.interaction_type }}
                                     </Badge>
                                     <span>{{ log.model ?? 'n/a' }}</span>
-                                    <span>{{ formatDateTime(log.created_at) }}</span>
+                                    <span>{{
+                                        formatDateTime(log.created_at)
+                                    }}</span>
                                 </div>
                             </div>
                             <div class="shrink-0 text-right">
-                                <p class="text-sm tabular-nums">{{ log.total_tokens.toLocaleString() }} tokens</p>
-                                <p class="text-xs text-muted-foreground">{{ formatCurrency(log.estimated_cost) }}</p>
+                                <p class="text-sm tabular-nums">
+                                    {{
+                                        log.total_tokens.toLocaleString()
+                                    }}
+                                    tokens
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ formatCurrency(log.estimated_cost) }}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -117,14 +144,11 @@ function formatDateTime(value?: string | null): string {
                                 size="sm"
                                 as-child
                             >
-                                <Link :href="logs.prev_page_url" preserve-scroll>Previous</Link>
+                                <Link :href="logs.prev_page_url" preserve-scroll
+                                    >Previous</Link
+                                >
                             </Button>
-                            <Button
-                                v-else
-                                variant="outline"
-                                size="sm"
-                                disabled
-                            >
+                            <Button v-else variant="outline" size="sm" disabled>
                                 Previous
                             </Button>
                             <Button
@@ -133,14 +157,11 @@ function formatDateTime(value?: string | null): string {
                                 size="sm"
                                 as-child
                             >
-                                <Link :href="logs.next_page_url" preserve-scroll>Next</Link>
+                                <Link :href="logs.next_page_url" preserve-scroll
+                                    >Next</Link
+                                >
                             </Button>
-                            <Button
-                                v-else
-                                variant="outline"
-                                size="sm"
-                                disabled
-                            >
+                            <Button v-else variant="outline" size="sm" disabled>
                                 Next
                             </Button>
                         </div>

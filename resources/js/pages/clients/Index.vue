@@ -88,10 +88,14 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusMessage = computed(() => {
-    if (props.status === 'client-created') return 'Client created and ready for knowledge base setup.';
-    if (props.status === 'client-updated') return 'Client configuration updated.';
-    if (props.status === 'client-deleted') return 'Client deleted successfully.';
-    if (props.status === 'knowledge-source-created') return 'Knowledge source saved for processing.';
+    if (props.status === 'client-created')
+        return 'Client created and ready for knowledge base setup.';
+    if (props.status === 'client-updated')
+        return 'Client configuration updated.';
+    if (props.status === 'client-deleted')
+        return 'Client deleted successfully.';
+    if (props.status === 'knowledge-source-created')
+        return 'Knowledge source saved for processing.';
     return null;
 });
 
@@ -119,9 +123,13 @@ function usageColor(percent: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Page header -->
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+            >
                 <div>
-                    <h1 class="text-2xl font-semibold tracking-tight">Clients</h1>
+                    <h1 class="text-2xl font-semibold tracking-tight">
+                        Clients
+                    </h1>
                     <p class="text-sm text-muted-foreground">
                         {{ summary.total_clients }} total &middot;
                         {{ summary.active_clients }} active &middot;
@@ -147,7 +155,9 @@ function usageColor(percent: number): string {
             <!-- Search & filter bar -->
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div class="relative flex-1">
-                    <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search
+                        class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                    />
                     <Input
                         v-model="search"
                         placeholder="Search by name, email, or plan..."
@@ -170,11 +180,15 @@ function usageColor(percent: number): string {
                 v-if="clients.length === 0"
                 class="flex flex-col items-center justify-center rounded-xl border border-dashed border-sidebar-border/70 py-16 text-center"
             >
-                <div class="rounded-lg border border-sidebar-border/70 bg-accent/30 p-3">
+                <div
+                    class="rounded-lg border border-sidebar-border/70 bg-accent/30 p-3"
+                >
                     <Plus class="size-6 text-muted-foreground" />
                 </div>
                 <h3 class="mt-4 text-sm font-medium">No clients yet</h3>
-                <p class="mt-1 text-sm text-muted-foreground">Create your first client to get started.</p>
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Create your first client to get started.
+                </p>
                 <Button as-child class="mt-4" size="sm">
                     <Link href="/clients/create">
                         <Plus class="mr-2 size-4" />
@@ -192,9 +206,14 @@ function usageColor(percent: number): string {
             </div>
 
             <!-- Client table/list -->
-            <div v-else class="overflow-hidden rounded-xl border border-sidebar-border/70">
+            <div
+                v-else
+                class="overflow-hidden rounded-xl border border-sidebar-border/70"
+            >
                 <!-- Table header -->
-                <div class="hidden border-b border-sidebar-border/70 bg-muted/30 px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground md:grid md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                <div
+                    class="hidden border-b border-sidebar-border/70 bg-muted/30 px-6 py-3 text-xs font-medium tracking-wider text-muted-foreground uppercase md:grid md:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+                >
                     <span>Client</span>
                     <span>Plan</span>
                     <span>Sources</span>
@@ -210,57 +229,116 @@ function usageColor(percent: number): string {
                         class="group transition hover:bg-accent/30"
                     >
                         <!-- Desktop row -->
-                        <div class="hidden items-center gap-4 px-6 py-4 md:grid md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                        <div
+                            class="hidden items-center gap-4 px-6 py-4 md:grid md:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+                        >
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <Link :href="`/clients/${client.id}`" class="truncate text-sm font-medium hover:underline">
+                                    <Link
+                                        :href="`/clients/${client.id}`"
+                                        class="truncate text-sm font-medium hover:underline"
+                                    >
                                         {{ client.name }}
                                     </Link>
-                                    <Badge :variant="badgeVariant(client.status)" class="shrink-0 text-[10px]">
-                                        {{ statusLabels[client.status] ?? client.status }}
+                                    <Badge
+                                        :variant="badgeVariant(client.status)"
+                                        class="shrink-0 text-[10px]"
+                                    >
+                                        {{
+                                            statusLabels[client.status] ??
+                                            client.status
+                                        }}
                                     </Badge>
                                 </div>
-                                <p class="mt-0.5 truncate text-xs text-muted-foreground">
+                                <p
+                                    class="mt-0.5 truncate text-xs text-muted-foreground"
+                                >
                                     {{ client.contact_email ?? 'No email' }}
                                 </p>
                             </div>
 
                             <div>
-                                <Badge v-if="client.plan" variant="outline" class="text-xs">{{ client.plan.name }}</Badge>
-                                <span v-else class="text-xs text-muted-foreground">--</span>
+                                <Badge
+                                    v-if="client.plan"
+                                    variant="outline"
+                                    class="text-xs"
+                                    >{{ client.plan.name }}</Badge
+                                >
+                                <span
+                                    v-else
+                                    class="text-xs text-muted-foreground"
+                                    >--</span
+                                >
                             </div>
 
                             <div class="flex items-center gap-1.5 text-sm">
-                                <FolderOpen class="size-3.5 text-muted-foreground" />
+                                <FolderOpen
+                                    class="size-3.5 text-muted-foreground"
+                                />
                                 {{ client.knowledge_sources_count }}
                             </div>
 
                             <div class="space-y-1">
-                                <div class="flex items-center justify-between text-xs">
-                                    <span>{{ client.current_month_tokens.toLocaleString() }}</span>
-                                    <span class="text-muted-foreground">/ {{ client.monthly_token_limit.toLocaleString() }}</span>
+                                <div
+                                    class="flex items-center justify-between text-xs"
+                                >
+                                    <span>{{
+                                        client.current_month_tokens.toLocaleString()
+                                    }}</span>
+                                    <span class="text-muted-foreground"
+                                        >/
+                                        {{
+                                            client.monthly_token_limit.toLocaleString()
+                                        }}</span
+                                    >
                                 </div>
-                                <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                    class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                                >
                                     <div
                                         class="h-full rounded-full transition-all"
-                                        :class="usageColor(usagePercent(client.current_month_tokens, client.monthly_token_limit))"
-                                        :style="{ width: `${usagePercent(client.current_month_tokens, client.monthly_token_limit)}%` }"
+                                        :class="
+                                            usageColor(
+                                                usagePercent(
+                                                    client.current_month_tokens,
+                                                    client.monthly_token_limit,
+                                                ),
+                                            )
+                                        "
+                                        :style="{
+                                            width: `${usagePercent(client.current_month_tokens, client.monthly_token_limit)}%`,
+                                        }"
                                     />
                                 </div>
                             </div>
 
                             <div class="flex w-24 justify-end gap-1">
-                                <Button variant="ghost" size="icon" as-child class="size-8">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    as-child
+                                    class="size-8"
+                                >
                                     <Link :href="`/clients/${client.id}`">
                                         <ArrowUpRight class="size-4" />
                                     </Link>
                                 </Button>
-                                <Button variant="ghost" size="icon" as-child class="size-8">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    as-child
+                                    class="size-8"
+                                >
                                     <Link :href="`/clients/${client.id}/edit`">
                                         <Pencil class="size-3.5" />
                                     </Link>
                                 </Button>
-                                <Button variant="ghost" size="icon" class="size-8 text-muted-foreground hover:text-red-600" @click="confirmDelete(client)">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="size-8 text-muted-foreground hover:text-red-600"
+                                    @click="confirmDelete(client)"
+                                >
                                     <Trash2 class="size-3.5" />
                                 </Button>
                             </div>
@@ -270,48 +348,96 @@ function usageColor(percent: number): string {
                         <div class="space-y-3 px-4 py-4 md:hidden">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <Link :href="`/clients/${client.id}`" class="text-sm font-medium hover:underline">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2"
+                                    >
+                                        <Link
+                                            :href="`/clients/${client.id}`"
+                                            class="text-sm font-medium hover:underline"
+                                        >
                                             {{ client.name }}
                                         </Link>
-                                        <Badge :variant="badgeVariant(client.status)" class="text-[10px]">
-                                            {{ statusLabels[client.status] ?? client.status }}
+                                        <Badge
+                                            :variant="
+                                                badgeVariant(client.status)
+                                            "
+                                            class="text-[10px]"
+                                        >
+                                            {{
+                                                statusLabels[client.status] ??
+                                                client.status
+                                            }}
                                         </Badge>
-                                        <Badge v-if="client.plan" variant="outline" class="text-[10px]">{{ client.plan.name }}</Badge>
+                                        <Badge
+                                            v-if="client.plan"
+                                            variant="outline"
+                                            class="text-[10px]"
+                                            >{{ client.plan.name }}</Badge
+                                        >
                                     </div>
-                                    <p class="mt-0.5 text-xs text-muted-foreground">{{ client.contact_email ?? 'No email' }}</p>
+                                    <p
+                                        class="mt-0.5 text-xs text-muted-foreground"
+                                    >
+                                        {{ client.contact_email ?? 'No email' }}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-4 text-xs text-muted-foreground">
+                            <div
+                                class="flex items-center gap-4 text-xs text-muted-foreground"
+                            >
                                 <span class="flex items-center gap-1">
                                     <FolderOpen class="size-3" />
                                     {{ client.knowledge_sources_count }} sources
                                 </span>
                                 <span class="flex items-center gap-1">
                                     <Zap class="size-3" />
-                                    {{ client.current_month_tokens.toLocaleString() }} / {{ client.monthly_token_limit.toLocaleString() }}
+                                    {{
+                                        client.current_month_tokens.toLocaleString()
+                                    }}
+                                    /
+                                    {{
+                                        client.monthly_token_limit.toLocaleString()
+                                    }}
                                 </span>
                             </div>
 
-                            <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                                class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                            >
                                 <div
                                     class="h-full rounded-full transition-all"
-                                    :class="usageColor(usagePercent(client.current_month_tokens, client.monthly_token_limit))"
-                                    :style="{ width: `${usagePercent(client.current_month_tokens, client.monthly_token_limit)}%` }"
+                                    :class="
+                                        usageColor(
+                                            usagePercent(
+                                                client.current_month_tokens,
+                                                client.monthly_token_limit,
+                                            ),
+                                        )
+                                    "
+                                    :style="{
+                                        width: `${usagePercent(client.current_month_tokens, client.monthly_token_limit)}%`,
+                                    }"
                                 />
                             </div>
 
                             <div class="flex gap-2">
                                 <Button size="sm" as-child class="flex-1">
-                                    <Link :href="`/clients/${client.id}`">Open workspace</Link>
+                                    <Link :href="`/clients/${client.id}`"
+                                        >Open workspace</Link
+                                    >
                                 </Button>
                                 <Button variant="outline" size="sm" as-child>
                                     <Link :href="`/clients/${client.id}/edit`">
                                         <Pencil class="size-3.5" />
                                     </Link>
                                 </Button>
-                                <Button variant="outline" size="sm" class="text-red-600 hover:bg-red-50" @click="confirmDelete(client)">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    class="text-red-600 hover:bg-red-50"
+                                    @click="confirmDelete(client)"
+                                >
                                     <Trash2 class="size-3.5" />
                                 </Button>
                             </div>
