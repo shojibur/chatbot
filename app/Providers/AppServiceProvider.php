@@ -25,6 +25,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        \Illuminate\Support\Facades\RateLimiter::for('chat', function (\Illuminate\Http\Request $request) {
+            $clientCode = $request->input('client_code', 'unknown');
+            return [
+                \Illuminate\Cache\RateLimiting\Limit::perMinute(10)->by($clientCode . '-' . $request->ip()),
+                \Illuminate\Cache\RateLimiting\Limit::perHour(100)->by('global-' . $clientCode),
+            ];
+        });
     }
 
     /**
