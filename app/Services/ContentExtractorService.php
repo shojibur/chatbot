@@ -26,6 +26,10 @@ class ContentExtractorService
      */
     public function extractFromUrl(string $url): string
     {
+        // Re-validate the resolved IP right before the fetch to prevent DNS rebinding attacks.
+        // (The URL was already validated at request time, but DNS can change between then and now.)
+        $this->validateUrlIsPublic($url);
+
         $response = Http::timeout(30)
             ->withHeaders([
                 'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -96,4 +100,52 @@ class ContentExtractorService
             default => throw new \RuntimeException("Unsupported file type: {$mime}"),
         };
     }
+
+    /**
+     * Resolve the URL's hostname and confirm it points to a public IP.
+     *
+     * Called immediately before every HTTP fetch so DNS rebinding attacks
+     * (a domain that resolves to 1.2.3.4 at validation time but to 10.x.x.x
+     * by the time the queued job runs) are caught at both stages.
+     *
+     * @throws \RuntimeException if the hostname resolves to a private/reserved address.
+     */
+    private function validateUrlIsPublic(string $url): void
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (! $host) {
+            throw new \RuntimeException("Could not parse host from URL: {$url}");
+        }
+
+        $ip = gethostbyname($host);
+
+        // gethostbyname() returns the original string when resolution fails
+        if ($ip === $host) {
+            throw new \RuntimeException("Could not resolve hostname: {$host}");
+        }
+
+        $isPrivate = filter_var(
+            $ip,
+            FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+        ) === false;
+
+        // Also block link-local (169.254.x.x — cloud metadata endpoints) and
+        // CGNAT (100.64.x.x) which FILTER_FLAG_NO_RES_RANGE does not cover.
+        $isLinkLocal = str_starts_with($ip, '169.254.');
+        $isCgnat     = (function () use ($ip): bool {
+            $packed = ip2long($ip);
+            return $packed !== false
+                && $packed >= ip2long('100.64.0.0')
+                && $packed <= ip2long('100.127.255.255');
+        })();
+
+        if ($isPrivate || $isLinkLocal || $isCgnat) {
+            throw new \RuntimeException(
+                "URL '{$url}' resolves to a restricted internal address ({$ip}) and cannot be fetched."
+            );
+        }
+    }
 }
+

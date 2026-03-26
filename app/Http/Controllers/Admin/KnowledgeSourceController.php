@@ -57,6 +57,10 @@ class KnowledgeSourceController extends Controller
      */
     public function update(Request $request, Client $client, KnowledgeSource $knowledgeSource): RedirectResponse
     {
+        if ($knowledgeSource->client_id !== $client->id) {
+            abort(404);
+        }
+
         $rules = [
             'title' => ['required', 'string', 'max:255'],
         ];
@@ -95,6 +99,10 @@ class KnowledgeSourceController extends Controller
      */
     public function destroy(Client $client, KnowledgeSource $knowledgeSource): RedirectResponse
     {
+        if ($knowledgeSource->client_id !== $client->id) {
+            abort(404);
+        }
+
         $knowledgeSource->delete();
 
         return to_route('clients.show', $client)->with('status', 'knowledge-source-deleted');
@@ -105,6 +113,10 @@ class KnowledgeSourceController extends Controller
      */
     public function chunks(Client $client, KnowledgeSource $knowledgeSource): JsonResponse
     {
+        if ($knowledgeSource->client_id !== $client->id) {
+            abort(404);
+        }
+
         $chunks = $knowledgeSource->knowledgeChunks()
             ->orderBy('chunk_index')
             ->get()
@@ -132,6 +144,10 @@ class KnowledgeSourceController extends Controller
      */
     public function retry(Client $client, KnowledgeSource $knowledgeSource): RedirectResponse
     {
+        if ($knowledgeSource->client_id !== $client->id) {
+            abort(404);
+        }
+
         $knowledgeSource->update([
             'status' => 'queued',
             'processing_error' => null,

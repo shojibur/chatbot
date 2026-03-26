@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Client;
 use App\Models\Plan;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,7 +15,7 @@ abstract class ClientRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->user_type === User::TYPE_ADMIN;
     }
 
     /**

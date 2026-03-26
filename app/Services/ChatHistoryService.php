@@ -25,16 +25,19 @@ class ChatHistoryService
             if ($session) {
                 return $session;
             }
+            // If the supplied token doesn't match any real session, discard it
+            // and issue a fresh server-generated token below — never echo back
+            // an attacker-controlled value as the authoritative session token.
         }
 
         return ChatSession::create([
-            'client_id' => $client->id,
-            'session_token' => $sessionToken ?: Str::random(64),
-            'visitor_ip' => $request->ip(),
+            'client_id'          => $client->id,
+            'session_token'      => Str::random(64), // Always server-generated for new sessions
+            'visitor_ip'         => $request->ip(),
             'visitor_identifier' => $request->input('visitor_id'),
-            'page_url' => $request->input('page_url'),
-            'user_agent' => mb_substr($request->userAgent() ?? '', 0, 500),
-            'last_activity_at' => now(),
+            'page_url'           => $request->input('page_url'),
+            'user_agent'         => mb_substr($request->userAgent() ?? '', 0, 500),
+            'last_activity_at'   => now(),
         ]);
     }
 
