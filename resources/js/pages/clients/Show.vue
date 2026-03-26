@@ -272,9 +272,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-1 flex-col gap-6 p-4 md:p-6">
             <!-- Header -->
-            <div
-                class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-            >
+            <div class="flex flex-col gap-6">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-2xl font-semibold tracking-tight">
@@ -294,7 +292,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                         }}
                     </p>
                 </div>
-                <div class="flex shrink-0 flex-wrap gap-2">
+                <div class="flex flex-wrap justify-end gap-2">
                     <Button
                         as-child
                         size="sm"

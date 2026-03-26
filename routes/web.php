@@ -6,7 +6,7 @@ use App\Http\Controllers\Admin\KnowledgeSourceController;
 use App\Http\Controllers\Admin\PlanController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
+Route::redirect('/', '/login')->name('home');
 
 
 
