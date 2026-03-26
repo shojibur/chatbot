@@ -113,7 +113,7 @@
                 v-if="config.widget_settings?.show_branding !== false"
                 class="davey-branding"
             >
-                Powered by Davey
+                Powered By zaochat.com
             </div>
         </div>
     </div>
