@@ -39,6 +39,15 @@ class StoreKnowledgeSourceRequest extends FormRequest
                 'nullable',
                 'url:http,https',
                 'max:1000',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (!$value) return;
+                    $host = parse_url($value, PHP_URL_HOST);
+                    if (!$host) return;
+                    $ip = gethostbyname($host);
+                    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                        $fail("The {$attribute} resolves to a restricted internal network address.");
+                    }
+                },
             ],
             'source_file' => [
                 Rule::requiredIf($this->input('source_type') === 'file'),

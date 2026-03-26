@@ -4,13 +4,14 @@ use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login')->name('home');
 
 
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('clients', [ClientController::class, 'index'])->name('clients.index');
