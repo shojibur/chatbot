@@ -16,8 +16,16 @@
         <!-- Classic & Glass Toggle Button -->
         <button
             v-else-if="!isOpen"
-            class="davey-toggle"
-            :style="{ background: primaryColor }"
+            :class="['davey-toggle', config.widget_style === 'glass' ? 'davey-glass-toggle' : '']"
+            :style="config.widget_style === 'glass' 
+                ? { 
+                    background: primaryColor + 'cc', 
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.4)',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)'
+                  }
+                : { background: primaryColor }"
             @click="toggleOpen()"
         >
             <svg
@@ -37,7 +45,14 @@
         <!-- Chat Panel -->
         <div v-if="isOpen" class="davey-panel">
             <!-- Header -->
-            <div class="davey-header" :style="{ background: primaryColor }">
+            <div class="davey-header" :style="config.widget_style === 'glass'
+                ? { 
+                    background: primaryColor + '99', 
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderBottom: '1px solid rgba(255,255,255,0.2)'
+                  }
+                : { background: primaryColor }">
                 <span class="davey-header-title">{{
                     config.name || 'Chat'
                 }}</span>
