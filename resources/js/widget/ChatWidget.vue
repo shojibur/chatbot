@@ -7,7 +7,7 @@
         <button
             v-if="!isOpen && config.widget_style === 'modern'"
             class="davey-toggle-pill"
-            @click="isOpen = true"
+            @click="toggleOpen()"
         >
             <div class="davey-pill-dot" :style="{ background: accentColor }"></div>
             <span class="davey-pill-text">{{ config.widget_settings?.toggle_text || 'Ask anything about this business' }}</span>
@@ -18,7 +18,7 @@
             v-else-if="!isOpen"
             class="davey-toggle"
             :style="{ background: primaryColor }"
-            @click="isOpen = true"
+            @click="toggleOpen()"
         >
             <svg
                 width="24"
@@ -41,7 +41,7 @@
                 <span class="davey-header-title">{{
                     config.name || 'Chat'
                 }}</span>
-                <button class="davey-close" @click="isOpen = false">
+                <button class="davey-close" @click="toggleOpen()">
                     &times;
                 </button>
             </div>
@@ -149,12 +149,15 @@ const props = defineProps<{
     config: WidgetConfig;
 }>();
 
-const isOpen = ref(false);
+const isOpen = ref(sessionStorage.getItem('davey_is_open') === 'true');
 const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
-const messages = ref<Message[]>([]);
-const sessionToken = ref<string | null>(null);
+
+const storedMessages = sessionStorage.getItem('davey_messages');
+const messages = ref<Message[]>(storedMessages ? JSON.parse(storedMessages) : []);
+
+const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_token'));
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
@@ -171,13 +174,23 @@ const positionStyle = computed(() => {
         : { right: '20px', left: 'auto' };
 });
 
+function toggleOpen() {
+    isOpen.value = !isOpen.value;
+    sessionStorage.setItem('davey_is_open', String(isOpen.value));
+}
+
+function saveMessages() {
+    sessionStorage.setItem('davey_messages', JSON.stringify(messages.value));
+}
+
 onMounted(() => {
     const welcome =
         props.config.welcome_message ||
         props.config.widget_settings?.welcome_message;
 
-    if (welcome) {
+    if (welcome && messages.value.length === 0) {
         messages.value.push({ role: 'assistant', content: welcome });
+        saveMessages();
     }
 });
 
@@ -233,6 +246,8 @@ async function send() {
     }
 
     messages.value.push({ role: 'user', content: text });
+    saveMessages();
+    
     input.value = '';
     loading.value = true;
     scrollToBottom();
@@ -262,10 +277,12 @@ async function send() {
 
         if (res.ok && data.answer) {
             messages.value.push({ role: 'assistant', content: data.answer });
+            saveMessages();
 
             // Store session_token from server so all messages in this conversation are linked
             if (data.session_token) {
                 sessionToken.value = data.session_token;
+                sessionStorage.setItem('davey_session_token', data.session_token);
             }
         } else {
             messages.value.push({
@@ -274,6 +291,7 @@ async function send() {
                     data.error ||
                     'Sorry, something went wrong. Please try again.',
             });
+            saveMessages();
         }
     } catch {
         messages.value.push({
@@ -281,6 +299,7 @@ async function send() {
             content:
                 'Unable to connect. Please check your internet connection.',
         });
+        saveMessages();
     } finally {
         loading.value = false;
         scrollToBottom();

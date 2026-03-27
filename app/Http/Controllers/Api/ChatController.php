@@ -187,7 +187,10 @@ class ChatController extends Controller
         
         unset($data['allowed_domains']);
 
-        return response()->json($data)->header('Cache-Control', 'public, max-age=300');
+        // Send no-cache headers so when the admin updates the widget settings, 
+        // the preview/live widget updates instantly on reload instead of being 
+        // cached by the browser. (Backend load is still protected by Cache::remember).
+        return response()->json($data)->header('Cache-Control', 'no-cache, must-revalidate');
     }
 
     private function buildSystemPrompt(Client $client, string $context): string
