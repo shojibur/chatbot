@@ -154,43 +154,24 @@ class ChatController extends Controller
      */
     public function widgetConfig(Request $request, string $clientCode): JsonResponse
     {
-        $cacheKey = "widget_config_{$clientCode}";
+        $client = Client::where('unique_code', $clientCode)
+            ->where('status', 'active')
+            ->first();
 
-        $data = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addDay(), function () use ($clientCode) {
-            $client = Client::where('unique_code', $clientCode)
-                ->where('status', 'active')
-                ->first();
-
-            if (! $client) {
-                return null;
-            }
-
-            return [
-                'name' => $client->name,
-                'widget_style' => $client->widget_style,
-                'widget_settings' => $client->widget_settings,
-                'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
-                'allowed_domains' => $client->allowed_domains,
-            ];
-        });
-
-        if (! $data) {
+        if (! $client) {
             return response()->json(['error' => 'Client not found.'], 404);
         }
 
-        $clientStub = new Client();
-        $clientStub->allowed_domains = $data['allowed_domains'] ?? [];
-        
-        if (! $this->verifyDomainAccess($request, $clientStub)) {
+        if (! $this->verifyDomainAccess($request, $client)) {
             return response()->json(['error' => 'Domain not authorized to load this widget.'], 403);
         }
-        
-        unset($data['allowed_domains']);
 
-        // Send no-cache headers so when the admin updates the widget settings, 
-        // the preview/live widget updates instantly on reload instead of being 
-        // cached by the browser. (Backend load is still protected by Cache::remember).
-        return response()->json($data)->header('Cache-Control', 'no-cache, must-revalidate');
+        return response()->json([
+            'name' => $client->name,
+            'widget_style' => $client->widget_style,
+            'widget_settings' => $client->widget_settings,
+            'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
+        ])->header('Cache-Control', 'no-cache, must-revalidate');
     }
 
     private function buildSystemPrompt(Client $client, string $context): string
@@ -259,8 +240,8 @@ class ChatController extends Controller
         // Always allow the dashboard application itself to test the chatbot (Playground/Preview).
         // In non-production environments, also allow localhost for local development.
         $appHost = strtolower(parse_url(config('app.url'), PHP_URL_HOST) ?? '');
-        $isLocalDev = ! app()->isProduction() && in_array($host, ['localhost', '127.0.0.1'], true);
-        if ($host === $appHost || $isLocalDev) {
+        $isLocalhost = in_array($host, ['localhost', '127.0.0.1'], true);
+        if ($host === $appHost || $isLocalhost) {
             return true;
         }
 
