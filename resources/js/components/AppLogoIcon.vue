@@ -13,6 +13,6 @@ defineProps<Props>();
 </script>
 
 <template>
-    <img src="/logodark.png" alt="Zaochat Logo" :class="[className, 'block dark:hidden']" v-bind="$attrs" />
-    <img src="/logowhite.png" alt="Zaochat Logo" :class="[className, 'hidden dark:block']" v-bind="$attrs" />
+    <img src="/logodark.png" alt="Zaochat Logo" :class="[className, 'block dark:hidden object-contain']" v-bind="$attrs" />
+    <img src="/logowhite.png" alt="Zaochat Logo" :class="[className, 'hidden dark:block object-contain']" v-bind="$attrs" />
 </template>
