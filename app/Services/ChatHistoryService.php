@@ -63,6 +63,42 @@ class ChatHistoryService
     }
 
     /**
+     * Return recent messages for a session formatted for the OpenAI messages array.
+     * Fetches the last $limit messages (excluding the current turn, call this before logging).
+     *
+     * @return array<int, array{role: string, content: string}>
+     */
+    public function getRecentHistory(ChatSession $session, int $limit = 6): array
+    {
+        return $session->messages()
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get(['role', 'content'])
+            ->reverse()
+            ->values()
+            ->map(fn ($m) => ['role' => $m->role, 'content' => $m->content])
+            ->all();
+    }
+
+    /**
+     * Build a search query that adds prior context so vague follow-ups
+     * ("What is it?", "Tell me more") retrieve meaningful chunks.
+     */
+    public function buildSearchQuery(string $currentMessage, array $recentHistory): string
+    {
+        // Collect the last 1-2 user turns from history to give the query context
+        $priorUserMessages = array_filter($recentHistory, fn ($m) => $m['role'] === 'user');
+        $priorUserMessages = array_values($priorUserMessages);
+        $lastPrior = end($priorUserMessages);
+
+        if ($lastPrior && mb_strlen($currentMessage) < 60) {
+            return $lastPrior['content'] . ' ' . $currentMessage;
+        }
+
+        return $currentMessage;
+    }
+
+    /**
      * Record a message and update session counters.
      */
     private function logMessage(

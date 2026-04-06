@@ -45,8 +45,10 @@ class ChatController extends Controller
         $chatModel = $client->chat_model ?? 'gpt-4o-mini';
         $promptHash = hash('sha256', $client->system_prompt ?? '');
 
-        // Resolve or create a chat session and log the user message
+        // Resolve or create a chat session, then fetch prior history BEFORE logging
+        // so that history only contains previous turns, not the current message.
         $chatSession = $this->chatHistoryService->resolveSession($client, $request);
+        $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
         // Check cache first
@@ -79,19 +81,28 @@ class ChatController extends Controller
             }
         }
 
+        // Build a context-aware search query so vague follow-ups like "What is it?"
+        // are enriched with prior conversation context before hitting the vector DB.
+        $searchQuery = $this->chatHistoryService->buildSearchQuery($message, $recentHistory);
+
         // Retrieve relevant chunks via vector search
-        $chunks = $this->retrievalService->search($client, $message);
+        $chunks = $this->retrievalService->search($client, $searchQuery);
         $context = $this->retrievalService->buildContext($chunks);
 
         // Build the RAG prompt
         $systemPrompt = $this->buildSystemPrompt($client, $context);
 
+        // Build the full messages array: system + prior turns + current user message.
+        // This gives the model memory of the conversation so it can resolve references.
+        $messages = [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ...$recentHistory,
+            ['role' => 'user', 'content' => $message],
+        ];
+
         $response = OpenAI::chat()->create([
             'model' => $chatModel,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $message],
-            ],
+            'messages' => $messages,
             'max_tokens' => 1024,
             'temperature' => 0.7,
         ]);
