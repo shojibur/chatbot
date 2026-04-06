@@ -66,13 +66,15 @@
                 <div
                     v-for="(msg, i) in messages"
                     :key="i"
-                    :class="['davey-msg', `davey-msg-${msg.role}`]"
+                    :class="['davey-msg', `davey-msg-${msg.role}`, msg.isLead ? 'davey-msg-lead' : '']"
                 >
                     <div
                         class="davey-msg-bubble"
                         :style="
                             msg.role === 'assistant'
-                                ? {}
+                                ? msg.isLead
+                                    ? { background: 'linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%)', border: '1px solid #bdd8f5', color: '#1a3a5c' }
+                                    : {}
                                 : { background: accentColor, color: '#fff' }
                         "
                     >
@@ -99,14 +101,14 @@
                     v-model="input"
                     type="text"
                     class="davey-input"
-                    placeholder="Type a message..."
-                    :disabled="loading"
+                    :placeholder="inputPlaceholder"
+                    :disabled="loading || leadStep === 'done'"
                     @keydown.enter="send"
                 />
                 <button
                     class="davey-send"
                     :style="{ background: primaryColor }"
-                    :disabled="!input.trim() || loading"
+                    :disabled="!input.trim() || loading || leadStep === 'done'"
                     @click="send"
                 >
                     <svg
@@ -156,7 +158,11 @@ interface WidgetConfig {
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    isLead?: boolean; // marks lead-capture bot prompts for special styling
 }
+
+// Lead capture state
+type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
 
 const props = defineProps<{
     clientCode: string;
@@ -174,6 +180,10 @@ const messages = ref<Message[]>(storedMessages ? JSON.parse(storedMessages) : []
 
 const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_token'));
 
+// --- Lead Capture State ---
+const leadStep = ref<LeadStep>(null);
+const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
 );
@@ -189,6 +199,26 @@ const positionStyle = computed(() => {
         : { right: '20px', left: 'auto' };
 });
 
+const inputPlaceholder = computed(() => {
+    if (leadStep.value === 'ask_name') {
+        return 'Enter your name…';
+    }
+
+    if (leadStep.value === 'ask_contact') {
+        return 'Phone number or email…';
+    }
+
+    if (leadStep.value === 'ask_notes') {
+        return 'Briefly describe what you need…';
+    }
+
+    if (leadStep.value === 'done') {
+        return 'Thank you! ✅';
+    }
+
+    return 'Type a message…';
+});
+
 function toggleOpen() {
     isOpen.value = !isOpen.value;
     sessionStorage.setItem('davey_is_open', String(isOpen.value));
@@ -196,6 +226,12 @@ function toggleOpen() {
 
 function saveMessages() {
     sessionStorage.setItem('davey_messages', JSON.stringify(messages.value));
+}
+
+function addBotMessage(content: string, isLead = false) {
+    messages.value.push({ role: 'assistant', content, isLead });
+    saveMessages();
+    scrollToBottom();
 }
 
 onMounted(() => {
@@ -223,36 +259,111 @@ function parseMessage(text: string) {
 
     return DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: [
-            'b',
-            'i',
-            'em',
-            'strong',
-            'a',
-            'p',
-            'br',
-            'ul',
-            'ol',
-            'li',
-            'code',
-            'pre',
-            'blockquote',
-            'h1',
-            'h2',
-            'h3',
-            'h4',
-            'h5',
-            'h6',
-            'hr',
-            'table',
-            'thead',
-            'tbody',
-            'tr',
-            'th',
-            'td',
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
         ],
     });
 }
 
+// -------------------------------------------------------------------
+// Lead capture flow — intercepts input when leadStep is active
+// -------------------------------------------------------------------
+async function handleLeadStep(text: string): Promise<boolean> {
+    if (!leadStep.value || leadStep.value === 'done') {
+        return false;
+    }
+
+    messages.value.push({ role: 'user', content: text });
+    saveMessages();
+    scrollToBottom();
+
+    if (leadStep.value === 'ask_name') {
+        leadData.value.name = text;
+        leadStep.value = 'ask_contact';
+        addBotMessage(
+            `Thanks ${leadData.value.name}! 📱 What's the best phone number or email address to reach you?`,
+            true,
+        );
+
+        return true;
+    }
+
+    if (leadStep.value === 'ask_contact') {
+        leadData.value.contact = text;
+        leadStep.value = 'ask_notes';
+        addBotMessage(
+            `Got it! One last thing — can you briefly describe what you need help with?`,
+            true,
+        );
+
+        return true;
+    }
+
+    if (leadStep.value === 'ask_notes') {
+        leadData.value.notes = text;
+        leadStep.value = 'done';
+        loading.value = true;
+        scrollToBottom();
+
+        try {
+            await saveLead();
+            addBotMessage(
+                `✅ **Thank you!** Our team will contact you soon.`,
+                true,
+            );
+        } catch {
+            addBotMessage(
+                `Sorry, there was a problem saving your details. Please try again or contact us directly.`,
+                true,
+            );
+        } finally {
+            loading.value = false;
+            // Resume normal chat after 4s
+            setTimeout(() => {
+                leadStep.value = null;
+                leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+            }, 4000);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+async function saveLead() {
+    const body: Record<string, string> = {
+        client_code:  props.clientCode,
+        name:         leadData.value.name,
+        contact:      leadData.value.contact,
+        user_request: leadData.value.triggerMessage,
+        notes:        leadData.value.notes,
+        trigger:      'intent',
+    };
+
+    if (sessionToken.value) {
+        body.session_token = sessionToken.value;
+    }
+
+    const res = await fetch(`${props.apiBase}/api/v1/leads`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+        throw new Error('Lead save failed');
+    }
+}
+
+// -------------------------------------------------------------------
+// Main send handler
+// -------------------------------------------------------------------
 async function send() {
     const text = input.value.trim();
 
@@ -260,10 +371,17 @@ async function send() {
         return;
     }
 
+    input.value = '';
+
+    // If we're in a lead capture step, handle it directly
+    if (leadStep.value && leadStep.value !== 'done') {
+        await handleLeadStep(text);
+
+        return;
+    }
+
     messages.value.push({ role: 'user', content: text });
     saveMessages();
-    
-    input.value = '';
     loading.value = true;
     scrollToBottom();
 
@@ -274,7 +392,6 @@ async function send() {
             page_url: window.location.href,
         };
 
-        // Send session_token on subsequent messages so they group into the same session
         if (sessionToken.value) {
             body.session_token = sessionToken.value;
         }
@@ -294,25 +411,35 @@ async function send() {
             messages.value.push({ role: 'assistant', content: data.answer });
             saveMessages();
 
-            // Store session_token from server so all messages in this conversation are linked
+            // Store session token
             if (data.session_token) {
                 sessionToken.value = data.session_token;
                 sessionStorage.setItem('davey_session_token', data.session_token);
             }
+
+            // Trigger lead capture flow if backend signals it
+            if (data.lead_capture && !leadStep.value) {
+                leadData.value.triggerMessage = text;
+                leadStep.value = 'ask_name';
+
+                setTimeout(() => {
+                    addBotMessage(
+                        `I can help with that! 😊 May I get your **name** first so our team can follow up with you?`,
+                        true,
+                    );
+                }, 600);
+            }
         } else {
             messages.value.push({
                 role: 'assistant',
-                content:
-                    data.error ||
-                    'Sorry, something went wrong. Please try again.',
+                content: data.error || 'Sorry, something went wrong. Please try again.',
             });
             saveMessages();
         }
     } catch {
         messages.value.push({
             role: 'assistant',
-            content:
-                'Unable to connect. Please check your internet connection.',
+            content: 'Unable to connect. Please check your internet connection.',
         });
         saveMessages();
     } finally {

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
+use App\Http\Controllers\Admin\LeadController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -44,6 +45,10 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::get('plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
     Route::patch('plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
     Route::delete('plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
+
+    Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
+    Route::get('leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
+    Route::patch('leads/{lead}/status', [LeadController::class, 'updateStatus'])->name('leads.status');
 });
 
 require __DIR__.'/settings.php';

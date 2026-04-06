@@ -16,6 +16,7 @@ import {
     RefreshCw,
     Trash2,
     Upload,
+    Users,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
@@ -51,6 +52,7 @@ type Props = {
     knowledge_source_types: string[];
     widget_script_url: string;
     status?: string;
+    lead_count?: number;
 };
 
 const props = defineProps<Props>();
@@ -319,6 +321,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                         <Link :href="`/clients/${client.id}/cache-entries`">
                             <DatabaseZap class="mr-1 size-3.5" />
                             Cache
+                        </Link>
+                    </Button>
+                    <Button as-child size="sm" variant="outline" class="border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-900 dark:bg-indigo-900/30 dark:text-indigo-400">
+                        <Link :href="`/leads?client_id=${client.id}`">
+                            <Users class="mr-1 size-3.5" />
+                            Leads ({{ lead_count ?? 0 }})
                         </Link>
                     </Button>
                     <Button as-child size="sm">

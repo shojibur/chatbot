@@ -118,6 +118,7 @@ class ClientController extends Controller
             'knowledge_source_types' => KnowledgeSource::SOURCE_TYPES,
             'widget_script_url' => url('/widget/widget.js').'?v='.(file_exists(public_path('widget/widget.js')) ? filemtime(public_path('widget/widget.js')) : time()),
             'status' => $request->session()->get('status'),
+            'lead_count' => $client->leads()->count(),
         ]);
     }
 

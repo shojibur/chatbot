@@ -56,6 +56,7 @@ const accentColor = computed(
 
 // Add welcome message on mount
 const welcomeMessage = props.client.widget_settings?.welcome_message;
+
 if (welcomeMessage) {
     messages.value.push({
         role: 'assistant',
@@ -64,16 +65,109 @@ if (welcomeMessage) {
     });
 }
 
+// Lead capture state
+type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
+const leadStep = ref<LeadStep>(null);
+const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+
+async function handleLeadStep(text: string): Promise<boolean> {
+    if (!leadStep.value || leadStep.value === 'done') {
+        return false;
+    }
+
+    // Add user response to chat
+    messages.value.push({ role: 'user', content: text, timestamp: new Date() });
+    scrollToBottom();
+
+    if (leadStep.value === 'ask_name') {
+        leadData.value.name = text;
+        leadStep.value = 'ask_contact';
+        messages.value.push({
+            role: 'assistant',
+            content: `Thanks ${leadData.value.name}! 📱 What's the best phone number or email address to reach you?`,
+            timestamp: new Date(),
+        });
+        return true;
+    }
+
+    if (leadStep.value === 'ask_contact') {
+        leadData.value.contact = text;
+        leadStep.value = 'ask_notes';
+        messages.value.push({
+            role: 'assistant',
+            content: `Got it! One last thing — can you briefly describe what you need help with?`,
+            timestamp: new Date(),
+        });
+        return true;
+    }
+
+    if (leadStep.value === 'ask_notes') {
+        leadData.value.notes = text;
+        leadStep.value = 'done';
+        loading.value = true;
+        scrollToBottom();
+
+        try {
+            await fetch(`${props.api_base_url}/api/v1/leads`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({
+                    client_code: props.client.unique_code,
+                    session_token: sessionId.value, // Usually the widget gets a session_token string back from ChatController, but here we just pass the Playground UUID for testing
+                    name: leadData.value.name,
+                    contact: leadData.value.contact,
+                    user_request: leadData.value.triggerMessage,
+                    notes: leadData.value.notes,
+                    trigger: 'intent',
+                }),
+            });
+            
+            messages.value.push({
+                role: 'assistant',
+                content: `✅ **Thank you!** Our team will contact you soon.`,
+                timestamp: new Date(),
+            });
+        } catch {
+            messages.value.push({
+                role: 'assistant',
+                content: `Sorry, there was a problem saving your details.`,
+                timestamp: new Date(),
+            });
+        } finally {
+            loading.value = false;
+            setTimeout(() => {
+                leadStep.value = null;
+                leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+            }, 4000);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 async function send() {
     const text = input.value.trim();
-    if (!text || loading.value) return;
+
+    if (!text || loading.value) {
+        return;
+    }
+
+    input.value = '';
+
+    if (leadStep.value && leadStep.value !== 'done') {
+        await handleLeadStep(text);
+
+        return;
+    }
 
     messages.value.push({
         role: 'user',
         content: text,
         timestamp: new Date(),
     });
-    input.value = '';
+    
     loading.value = true;
     requestCount.value++;
     scrollToBottom();
@@ -98,8 +192,12 @@ async function send() {
         const elapsed = Math.round(performance.now() - startTime);
 
         if (res.ok && data.answer) {
-            if (data.cached) cacheHits.value++;
+            if (data.cached) {
+                cacheHits.value++;
+            }
 
+            // If the live widget detects lead_capture, it waits 600ms gracefully and intercepts.
+            // Let's do the exact same thing here.
             messages.value.push({
                 role: 'assistant',
                 content: data.answer,
@@ -109,8 +207,23 @@ async function send() {
                     response_time_ms: elapsed,
                     cached: data.cached ?? false,
                     status: res.status,
+                    lead_capture: data.lead_capture ?? false,
                 },
             });
+
+            if (data.lead_capture && !leadStep.value) {
+                leadData.value.triggerMessage = text;
+                leadStep.value = 'ask_name';
+                
+                setTimeout(() => {
+                    messages.value.push({
+                        role: 'assistant',
+                        content: `I can help with that! 😊 May I get your **name** first so our team can follow up with you?`,
+                        timestamp: new Date(),
+                    });
+                    scrollToBottom();
+                }, 600);
+            }
         } else {
             messages.value.push({
                 role: 'assistant',
@@ -155,6 +268,7 @@ function clearChat() {
     totalCost.value = 0;
     requestCount.value = 0;
     cacheHits.value = 0;
+    leadStep.value = null;
 
     if (welcomeMessage) {
         messages.value.push({

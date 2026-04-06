@@ -142,4 +142,12 @@ class Client extends Model
     {
         return $this->hasMany(ChatMessage::class);
     }
+
+    /**
+     * Get all leads captured for this client.
+     */
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
+    }
 }
