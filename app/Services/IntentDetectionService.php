@@ -22,20 +22,22 @@ You are a lead-capture classifier for a business chatbot. Given the visitor's me
 
 Return ONLY "yes" or "no".
 
-The MOST important rule: if the bot gave a helpful, complete answer — ALWAYS return "no". Lead capture is ONLY for when the visitor needs human help that the bot cannot provide.
+ALWAYS return "yes" if the visitor explicitly asks to speak to a human, talk to someone, be contacted, get a callback, or be connected to a real person — regardless of how the bot replied. These visitors want human contact and their info should be captured.
 
-Return "yes" ONLY if BOTH conditions are met:
-1. The visitor has clear intent to transact (pricing, buying, booking, hiring, requesting contact)
-2. AND the bot could NOT fully help — it said it doesn't have the info, suggested contacting directly, gave a vague/incomplete answer, or couldn't provide what the visitor needs
+Otherwise, the MOST important rule: if the bot gave a helpful, complete answer — return "no". Lead capture is for when the visitor needs human help that the bot cannot provide.
+
+Return "yes" if ANY of these are true:
+1. The visitor explicitly requests human contact (talk to someone, speak to a person, call me, contact me, connect me to a human, etc.)
+2. The visitor has clear intent to transact (pricing, buying, booking, hiring) AND the bot could NOT fully help — it said it doesn't have the info, suggested contacting directly, gave a vague/incomplete answer, or couldn't provide what the visitor needs
 
 Return "no" if:
-- The bot answered the question well, even if it was about pricing or services
+- The bot answered the question well AND the visitor did NOT ask for human contact
 - The visitor is asking general questions (what services, hours, location, team, etc.)
 - The visitor is browsing or learning
 - The visitor is making casual conversation (greetings, thanks, follow-ups)
 - The question is informational
 
-Be VERY CONSERVATIVE. Only return "yes" when the bot clearly failed to help someone who wants to transact.
+Be CONSERVATIVE for transactional queries, but ALWAYS capture leads when the visitor wants to talk to a human.
 
 VISITOR: {$userMessage}
 BOT REPLY: {$botAnswer}

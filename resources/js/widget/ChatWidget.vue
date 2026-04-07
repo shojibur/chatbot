@@ -271,6 +271,28 @@ function parseMessage(text: string) {
 // -------------------------------------------------------------------
 // Lead capture flow — intercepts input when leadStep is active
 // -------------------------------------------------------------------
+function userIsRefusing(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    const refusalPatterns = [
+        'no', 'nah', 'nope', 'not', "don't", 'dont', 'do not',
+        'i refuse', 'skip', 'pass', 'never mind', 'nevermind',
+        'forget it', 'stop', 'cancel', "i'd rather not", 'i rather not',
+        'no thanks', 'no thank', 'not interested', 'leave me alone',
+        'i don\'t want', 'i do not want', 'i dont want',
+        'prefer not', 'rather not', 'not now',
+    ];
+    return refusalPatterns.some((p) => lower.includes(p));
+}
+
+function cancelLeadCapture() {
+    leadStep.value = null;
+    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    addBotMessage(
+        `No problem at all! Feel free to continue chatting — I'm here if you need anything.`,
+        true,
+    );
+}
+
 async function handleLeadStep(text: string): Promise<boolean> {
     if (!leadStep.value || leadStep.value === 'done') {
         return false;
@@ -279,6 +301,12 @@ async function handleLeadStep(text: string): Promise<boolean> {
     messages.value.push({ role: 'user', content: text });
     saveMessages();
     scrollToBottom();
+
+    // If the user refuses at any step, gracefully exit the lead capture flow
+    if (userIsRefusing(text)) {
+        cancelLeadCapture();
+        return true;
+    }
 
     if (leadStep.value === 'ask_name') {
         leadData.value.name = text;
