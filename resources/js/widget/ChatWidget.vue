@@ -183,6 +183,7 @@ const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_to
 // --- Lead Capture State ---
 const leadStep = ref<LeadStep>(null);
 const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+const leadCapturedThisSession = ref(sessionStorage.getItem('davey_lead_captured') === 'true');
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
@@ -309,6 +310,8 @@ async function handleLeadStep(text: string): Promise<boolean> {
 
         try {
             await saveLead();
+            leadCapturedThisSession.value = true;
+            sessionStorage.setItem('davey_lead_captured', 'true');
             addBotMessage(
                 `✅ **Thank you!** Our team will contact you soon.`,
                 true,
@@ -417,8 +420,8 @@ async function send() {
                 sessionStorage.setItem('davey_session_token', data.session_token);
             }
 
-            // Trigger lead capture flow if backend signals it
-            if (data.lead_capture && !leadStep.value) {
+            // Trigger lead capture flow if backend signals it (only once per session)
+            if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
                 leadData.value.triggerMessage = text;
                 leadStep.value = 'ask_name';
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import DOMPurify from 'dompurify';
 import { ArrowLeft, Bot, Info, RotateCcw, Send } from 'lucide-vue-next';
+import { marked } from 'marked';
 import { computed, nextTick, ref } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,6 +70,7 @@ if (welcomeMessage) {
 // Lead capture state
 type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
 const leadStep = ref<LeadStep>(null);
+const leadCapturedThisSession = ref(false);
 const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
 
 async function handleLeadStep(text: string): Promise<boolean> {
@@ -122,6 +125,7 @@ async function handleLeadStep(text: string): Promise<boolean> {
                 }),
             });
             
+            leadCapturedThisSession.value = true;
             messages.value.push({
                 role: 'assistant',
                 content: `✅ **Thank you!** Our team will contact you soon.`,
@@ -211,7 +215,7 @@ async function send() {
                 },
             });
 
-            if (data.lead_capture && !leadStep.value) {
+            if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
                 leadData.value.triggerMessage = text;
                 leadStep.value = 'ask_name';
                 
@@ -269,6 +273,7 @@ function clearChat() {
     requestCount.value = 0;
     cacheHits.value = 0;
     leadStep.value = null;
+    leadCapturedThisSession.value = false;
 
     if (welcomeMessage) {
         messages.value.push({
@@ -288,6 +293,21 @@ function formatTime(date: Date): string {
 }
 
 const showDebug = ref(true);
+
+marked.setOptions({ breaks: true, gfm: true });
+
+function parseMessage(text: string): string {
+    if (!text) return '';
+    const rawHtml = marked.parse(text) as string;
+    return DOMPurify.sanitize(rawHtml, {
+        ALLOWED_TAGS: [
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        ],
+    });
+}
 </script>
 
 <template>
@@ -432,7 +452,12 @@ const showDebug = ref(true);
                                             : {}
                                     "
                                 >
-                                    <p class="whitespace-pre-wrap">
+                                    <div
+                                        v-if="msg.role === 'assistant'"
+                                        class="playground-markdown"
+                                        v-html="parseMessage(msg.content)"
+                                    ></div>
+                                    <p v-else class="whitespace-pre-wrap">
                                         {{ msg.content }}
                                     </p>
                                 </div>
@@ -677,3 +702,30 @@ const showDebug = ref(true);
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+.playground-markdown :deep(p) {
+    margin: 0.25em 0;
+}
+.playground-markdown :deep(ul),
+.playground-markdown :deep(ol) {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+.playground-markdown :deep(li) {
+    margin: 0.2em 0;
+}
+.playground-markdown :deep(strong) {
+    font-weight: 600;
+}
+.playground-markdown :deep(code) {
+    font-size: 0.85em;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+}
+.playground-markdown :deep(a) {
+    color: #6366f1;
+    text-decoration: underline;
+}
+</style>
