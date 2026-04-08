@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\NewLeadCaptured;
 use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\Lead;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class LeadController extends Controller
 {
@@ -44,7 +46,7 @@ class LeadController extends Controller
                 ->toArray()
             : [];
 
-        Lead::create([
+        $lead = Lead::create([
             'client_id'             => $client->id,
             'chat_session_id'       => $session?->id,
             'name'                  => $data['name'],
@@ -54,6 +56,12 @@ class LeadController extends Controller
             'conversation_snapshot' => $snapshot,
             'trigger'               => $data['trigger'] ?? 'intent',
         ]);
+
+        // Notify the client's contact email about the new lead
+        if ($client->contact_email) {
+            Mail::to($client->contact_email)
+                ->send(new NewLeadCaptured($lead->load('client')));
+        }
 
         return response()->json(['success' => true]);
     }
