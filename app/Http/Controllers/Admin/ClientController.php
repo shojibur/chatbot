@@ -244,6 +244,26 @@ class ClientController extends Controller
     }
 
     /**
+     * Delete a single cache entry.
+     */
+    public function destroyCacheEntry(Client $client, int $cacheEntry): RedirectResponse
+    {
+        $client->conversationCaches()->where('id', $cacheEntry)->delete();
+
+        return back()->with('status', 'cache-entry-deleted');
+    }
+
+    /**
+     * Clear all cache entries for a client.
+     */
+    public function clearCache(Client $client): RedirectResponse
+    {
+        $client->conversationCaches()->delete();
+
+        return back()->with('status', 'cache-cleared');
+    }
+
+    /**
      * Show the edit client page.
      */
     public function edit(Client $client): Response

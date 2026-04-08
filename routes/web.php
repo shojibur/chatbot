@@ -25,6 +25,8 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::get('clients/{client}/chat-history/{session}/messages', [ClientController::class, 'chatSessionMessages'])->name('clients.chat-history.messages');
     Route::get('clients/{client}/usage-logs', [ClientController::class, 'usageLogs'])->name('clients.usage-logs');
     Route::get('clients/{client}/cache-entries', [ClientController::class, 'cacheEntries'])->name('clients.cache-entries');
+    Route::delete('clients/{client}/cache-entries', [ClientController::class, 'clearCache'])->name('clients.cache-entries.clear');
+    Route::delete('clients/{client}/cache-entries/{cacheEntry}', [ClientController::class, 'destroyCacheEntry'])->name('clients.cache-entries.destroy');
     Route::patch('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
     Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
 
