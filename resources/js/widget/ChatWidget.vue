@@ -55,10 +55,13 @@
                     borderBottom: '1px solid rgba(255,255,255,0.2)'
                   }
                 : { background: primaryColor }">
-                <span class="davey-header-title">
-                    <span class="davey-header-dot"></span>
-                    {{ config.name || 'Chat' }}
-                </span>
+                <div class="davey-header-info">
+                    <span class="davey-header-title">{{ config.name || 'Chat' }}</span>
+                    <span class="davey-header-status">
+                        <span class="davey-header-dot"></span>
+                        Online now
+                    </span>
+                </div>
                 <button class="davey-close" @click="toggleOpen()">
                     &times;
                 </button>

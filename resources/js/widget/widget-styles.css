@@ -43,7 +43,7 @@
 .davey-online-dot {
     position: absolute;
     top: 2px;
-    right: 2px;
+    left: 2px;
     width: 14px;
     height: 14px;
     background: #22c55e;
@@ -159,19 +159,28 @@
     justify-content: space-between;
     flex-shrink: 0;
 }
+.davey-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
 .davey-header-title {
     font-weight: 600;
     font-size: 15px;
+}
+.davey-header-status {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.9;
 }
 .davey-header-dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     background: #22c55e;
     border-radius: 50%;
-    border: 1.5px solid rgba(255, 255, 255, 0.6);
     flex-shrink: 0;
     animation: davey-pulse-header 2s infinite;
 }
