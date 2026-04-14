@@ -9,38 +9,40 @@
             class="davey-toggle-pill"
             @click="toggleOpen()"
         >
-            <div class="davey-pill-dot" :style="{ background: accentColor }"></div>
+            <div class="davey-pill-dot" :style="{ background: '#22c55e' }"></div>
             <span class="davey-pill-text">{{ config.widget_settings?.toggle_text || 'Ask anything about this business' }}</span>
         </button>
 
         <!-- Classic & Glass Toggle Button -->
-        <button
-            v-else-if="!isOpen"
-            :class="['davey-toggle', config.widget_style === 'glass' ? 'davey-glass-toggle' : '']"
-            :style="config.widget_style === 'glass' 
-                ? { 
-                    background: primaryColor + 'cc', 
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,0.4)',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)'
-                  }
-                : { background: primaryColor }"
-            @click="toggleOpen()"
-        >
-            <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+        <div v-else-if="!isOpen" class="davey-toggle-wrapper">
+            <span class="davey-online-dot"></span>
+            <button
+                :class="['davey-toggle', config.widget_style === 'glass' ? 'davey-glass-toggle' : '']"
+                :style="config.widget_style === 'glass'
+                    ? {
+                        background: primaryColor + 'cc',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(255,255,255,0.4)',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)'
+                      }
+                    : { background: primaryColor }"
+                @click="toggleOpen()"
             >
-                <path
-                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-                />
-            </svg>
-        </button>
+                <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path
+                        d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                    />
+                </svg>
+            </button>
+        </div>
 
         <!-- Chat Panel -->
         <div v-if="isOpen" class="davey-panel">
@@ -53,9 +55,10 @@
                     borderBottom: '1px solid rgba(255,255,255,0.2)'
                   }
                 : { background: primaryColor }">
-                <span class="davey-header-title">{{
-                    config.name || 'Chat'
-                }}</span>
+                <span class="davey-header-title">
+                    <span class="davey-header-dot"></span>
+                    {{ config.name || 'Chat' }}
+                </span>
                 <button class="davey-close" @click="toggleOpen()">
                     &times;
                 </button>
