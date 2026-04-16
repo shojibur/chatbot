@@ -12,7 +12,7 @@ import widgetStyles from './widget-styles.css?inline';
 
     if (!script) {
         console.error(
-            '[Davey] Could not find widget script tag. Ensure it has a data-client-code attribute.',
+            '[Zao Chat] Could not find widget script tag. Ensure it has a data-client-code attribute.',
         );
         return;
     }
@@ -20,7 +20,7 @@ import widgetStyles from './widget-styles.css?inline';
     const clientCode = script.getAttribute('data-client-code');
     if (!clientCode) {
         console.error(
-            '[Davey] Missing data-client-code attribute on script tag.',
+            '[Zao Chat] Missing data-client-code attribute on script tag.',
         );
         return;
     }
@@ -66,6 +66,6 @@ import widgetStyles from './widget-styles.css?inline';
             app.mount(mountEl);
         })
         .catch((err) => {
-            console.error('[Davey] Failed to initialize widget:', err);
+            console.error('[Zao Chat] Failed to initialize widget:', err);
         });
 })();

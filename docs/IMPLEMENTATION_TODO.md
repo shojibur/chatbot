@@ -1,4 +1,4 @@
-# Davey Chatbot - Implementation TODO
+# Zao Chat - Implementation TODO
 
 > Auto-generated implementation plan. Each phase builds on the previous.
 > Status: [ ] = pending, [x] = done, [~] = in progress

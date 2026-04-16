@@ -59,7 +59,7 @@
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
                                 <tr>
                                     <td style="font-size: 20px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
-                                        {{ config('app.name', 'Zaochat') }}
+                                        {{ config('app.name', 'Zao Chat') }}
                                     </td>
                                 </tr>
                             </table>
@@ -211,7 +211,7 @@
                                 This lead was captured by the <strong style="color: #6b7280;">{{ $lead->client->name }}</strong> chatbot.
                             </p>
                             <p style="margin: 0; font-size: 12px; color: #d1d5db;">
-                                {{ $lead->created_at->format('M j, Y \a\t g:i A') }} &middot; Powered by {{ config('app.name', 'Zaochat') }}
+                                {{ $lead->created_at->format('M j, Y \a\t g:i A') }} &middot; Powered by {{ config('app.name', 'Zao Chat') }}
                             </p>
                         </td>
                     </tr>

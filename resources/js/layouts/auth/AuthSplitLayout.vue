@@ -37,7 +37,7 @@ defineProps<{
                         <AppLogoIcon class="size-5 text-white" />
                     </div>
                     <span class="text-xl font-bold tracking-tight text-white"
-                        >Zaochat</span
+                        >Zao Chat</span
                     >
                 </Link>
             </div>
@@ -97,7 +97,7 @@ defineProps<{
             <!-- Bottom: Footer -->
             <div class="relative z-10 p-10">
                 <p class="text-xs text-slate-500">
-                    &copy; {{ new Date().getFullYear() }} Zaochat. All
+                    &copy; {{ new Date().getFullYear() }} Zao Chat. All
                     rights reserved.
                 </p>
             </div>
@@ -116,7 +116,7 @@ defineProps<{
                         <AppLogoIcon class="size-5 text-white" />
                     </div>
                     <span class="text-xl font-bold tracking-tight"
-                        >Zaochat</span
+                        >Zao Chat</span
                     >
                 </Link>
             </div>

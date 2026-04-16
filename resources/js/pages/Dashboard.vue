@@ -126,7 +126,7 @@ const interactionLabels: Record<string, string> = {
             <div>
                 <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
                 <p class="text-sm text-muted-foreground">
-                    Overview of your Zaochat platform.
+                    Overview of your Zao Chat platform.
                 </p>
             </div>
 

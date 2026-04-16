@@ -39,7 +39,7 @@ const showContactModal = ref(false);
                     </svg>
                 </div>
                 <span class="text-xl font-bold tracking-tight"
-                    >Zaochat</span
+                    >Zao Chat</span
                 >
             </div>
 
@@ -101,7 +101,7 @@ const showContactModal = ref(false);
                     <p
                         class="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-400 sm:text-lg"
                     >
-                        Zaochat learns from your documents and website to
+                        Zao Chat learns from your documents and website to
                         answer customer questions 24/7. Reduce support tickets,
                         delight customers, and free up your team.
                     </p>
@@ -190,9 +190,9 @@ const showContactModal = ref(false);
                                         class="max-w-[85%] rounded-2xl rounded-bl-md border border-white/5 bg-slate-800/80 px-4 py-3 text-sm leading-relaxed text-slate-200"
                                     >
                                         Yes! We offer free shipping on all
-                                        orders over $50 within Hawaii. For
-                                        mainland orders, flat-rate shipping
-                                        starts at $9.99.
+                                        orders over $50 nationwide. For
+                                        international orders, flat-rate
+                                        shipping starts at $9.99.
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2 pt-1">
@@ -648,18 +648,18 @@ const showContactModal = ref(false);
                                 />
                             </svg>
                         </div>
-                        <span class="text-sm font-semibold">Zaochat</span>
+                        <span class="text-sm font-semibold">Zao Chat</span>
                     </div>
                     <div class="flex items-center gap-6">
                         <a
-                            href="mailto:info@thehawaiiagency.com"
+                            href="mailto:hello@zaochat.com"
                             class="text-sm text-slate-400 transition hover:text-white"
                         >
-                            info@thehawaiiagency.com
+                            hello@zaochat.com
                         </a>
                     </div>
                     <p class="text-sm text-slate-500">
-                        &copy; {{ new Date().getFullYear() }} Zaochat. All
+                        &copy; {{ new Date().getFullYear() }} Zao Chat. All
                         rights reserved.
                     </p>
                 </div>
@@ -738,7 +738,7 @@ const showContactModal = ref(false);
                                 </div>
 
                                 <h3 class="text-xl font-bold text-white">
-                                    Get Started with Zaochat
+                                    Get Started with Zao Chat
                                 </h3>
                                 <p class="mt-2 text-sm text-slate-400">
                                     Reach out to us and we'll set up your custom
@@ -749,7 +749,7 @@ const showContactModal = ref(false);
                             <div class="mt-8 space-y-4">
                                 <!-- Email -->
                                 <a
-                                    href="mailto:info@thehawaiiagency.com"
+                                    href="mailto:hello@zaochat.com"
                                     class="flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.03] p-4 transition hover:border-blue-500/20 hover:bg-white/[0.06]"
                                 >
                                     <div
@@ -777,14 +777,14 @@ const showContactModal = ref(false);
                                             Email Us
                                         </p>
                                         <p class="text-sm text-blue-400">
-                                            info@thehawaiiagency.com
+                                            hello@zaochat.com
                                         </p>
                                     </div>
                                 </a>
 
                                 <!-- Website -->
                                 <a
-                                    href="mailto:info@thehawaiiagency.com?subject=Zaochat%20Inquiry"
+                                    href="mailto:hello@zaochat.com?subject=Zao Chat%20Inquiry"
                                     class="flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.03] p-4 transition hover:border-blue-500/20 hover:bg-white/[0.06]"
                                 >
                                     <div
