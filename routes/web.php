@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
 use App\Http\Controllers\Admin\LeadController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,37 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     Route::patch('leads/{lead}/status', [LeadController::class, 'updateStatus'])->name('leads.status');
+
+    Route::resource('users', UserController::class);
+});
+
+Route::middleware(['auth', 'verified', \App\Http\Middleware\EnsureUserIsClient::class])->prefix('portal')->name('portal.')->group(function () {
+    Route::get('dashboard', \App\Http\Controllers\Portal\DashboardController::class)->name('dashboard');
+
+    Route::post('knowledge-sources', [\App\Http\Controllers\Portal\KnowledgeSourceController::class, 'store'])
+        ->name('knowledge-sources.store');
+    Route::patch('knowledge-sources/{knowledgeSource}', [\App\Http\Controllers\Portal\KnowledgeSourceController::class, 'update'])
+        ->name('knowledge-sources.update');
+    Route::delete('knowledge-sources/{knowledgeSource}', [\App\Http\Controllers\Portal\KnowledgeSourceController::class, 'destroy'])
+        ->name('knowledge-sources.destroy');
+    Route::post('knowledge-sources/{knowledgeSource}/retry', [\App\Http\Controllers\Portal\KnowledgeSourceController::class, 'retry'])
+        ->name('knowledge-sources.retry');
+    Route::get('knowledge-sources/{knowledgeSource}/chunks', [\App\Http\Controllers\Portal\KnowledgeSourceController::class, 'chunks'])
+        ->name('knowledge-sources.chunks');
+
+    Route::get('playground', \App\Http\Controllers\Portal\PlaygroundController::class)->name('playground');
+    Route::post('playground/chat', [\App\Http\Controllers\Portal\PlaygroundChatController::class, 'chat'])->name('playground.chat');
+    Route::get('subscription', \App\Http\Controllers\Portal\SubscriptionController::class)->name('subscription');
+
+    // Chat History
+    Route::get('chat-history', [\App\Http\Controllers\Portal\ChatHistoryController::class, 'index'])->name('chat-history');
+    Route::get('chat-history/{session}/messages', [\App\Http\Controllers\Portal\ChatHistoryController::class, 'messages'])->name('chat-history.messages');
+
+    // Leads
+    Route::get('leads', [\App\Http\Controllers\Portal\LeadController::class, 'index'])->name('leads.index');
+    Route::get('leads/{lead}', [\App\Http\Controllers\Portal\LeadController::class, 'show'])->name('leads.show');
+    Route::patch('leads/{lead}/status', [\App\Http\Controllers\Portal\LeadController::class, 'updateStatus'])->name('leads.status');
+    Route::delete('leads/{lead}', [\App\Http\Controllers\Portal\LeadController::class, 'destroy'])->name('leads.destroy');
 });
 
 require __DIR__.'/settings.php';

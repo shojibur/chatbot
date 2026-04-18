@@ -2,24 +2,38 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Models\User;
 
 class EnsureUserIsAdmin
 {
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->user() && $request->user()->user_type === User::TYPE_ADMIN) {
+        $user = $request->user();
+
+        // Not logged in → login page
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        // Admin → allow through
+        if ($user->user_type === User::TYPE_ADMIN) {
             return $next($request);
         }
 
-        return response('Unauthorized action.', 403);
+        // Client user trying to hit admin routes → redirect to their portal
+        if ($user->user_type === User::TYPE_CLIENT && $user->client_id) {
+            return redirect()->route('portal.dashboard');
+        }
+
+        // Any other case → login
+        return redirect()->route('login');
     }
 }

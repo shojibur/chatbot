@@ -150,4 +150,37 @@ class Client extends Model
     {
         return $this->hasMany(Lead::class);
     }
+
+    /**
+     * Get all users associated with this client.
+     */
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    /**
+     * Get all usage limits for this client based on their plan.
+     * Falls back to sensible defaults when no plan is assigned.
+     */
+    public function limits(): array
+    {
+        $plan = $this->plan;
+
+        return [
+            'max_knowledge_sources' => $plan?->max_knowledge_sources ?? 5,
+            'max_file_upload_mb'    => $plan?->max_file_upload_mb    ?? 10,
+            'monthly_token_limit'   => $plan?->monthly_token_limit   ?? $this->monthly_token_limit ?? 100000,
+            'monthly_message_limit' => $plan?->monthly_message_limit ?? 500,
+        ];
+    }
+
+    /**
+     * Check whether this client has reached their knowledge source quota.
+     */
+    public function atKnowledgeSourceLimit(): bool
+    {
+        $max = $this->limits()['max_knowledge_sources'];
+        return $this->knowledgeSources()->count() >= $max;
+    }
 }

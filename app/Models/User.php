@@ -27,7 +27,16 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'client_id',
     ];
+
+    /**
+     * Get the client associated with the user.
+     */
+    public function client(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
 
     /**
      * The attributes that should be hidden for serialization.
