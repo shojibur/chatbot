@@ -269,29 +269,54 @@ class ChatController extends Controller
             return false;
         }
 
-        $host = parse_url($origin, PHP_URL_HOST);
-        if (! $host) {
+        $requestHost = parse_url($origin, PHP_URL_HOST);
+        if (! $requestHost) {
             return false;
         }
 
-        $host = strtolower($host);
+        $requestHost = strtolower($requestHost);
 
         // Always allow the dashboard application itself to test the chatbot (Playground/Preview).
         // In non-production environments, also allow localhost for local development.
         $appHost = strtolower(parse_url(config('app.url'), PHP_URL_HOST) ?? '');
-        $isLocalhost = in_array($host, ['localhost', '127.0.0.1'], true);
-        if ($host === $appHost || $isLocalhost) {
-            return true;
+        $isLocalhost = in_array($requestHost, ['localhost', '127.0.0.1'], true);
+
+        if ($requestHost === $appHost || $isLocalhost) {
+            // Iframe embeds are served from appHost, so use page_url (if provided)
+            // to validate the actual parent website domain.
+            $parentHost = $this->extractHostFromUrl(
+                (string) ($request->input('page_url') ?? $request->query('page_url') ?? '')
+            );
+
+            if ($parentHost && $parentHost !== $appHost && !in_array($parentHost, ['localhost', '127.0.0.1'], true)) {
+                $requestHost = $parentHost;
+            } else {
+                return true;
+            }
         }
 
         $allowed = array_map(fn ($d) => strtolower(trim($d)), $client->allowed_domains);
 
         foreach ($allowed as $domain) {
-            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+            if ($requestHost === $domain || str_ends_with($requestHost, '.' . $domain)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function extractHostFromUrl(string $url): ?string
+    {
+        if ($url === '') {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if (! is_string($host) || $host === '') {
+            return null;
+        }
+
+        return strtolower($host);
     }
 }

@@ -117,6 +117,8 @@ class ClientController extends Controller
             ],
             'knowledge_source_types' => KnowledgeSource::SOURCE_TYPES,
             'widget_script_url' => url('/widget/widget.js').'?v='.(file_exists(public_path('widget/widget.js')) ? filemtime(public_path('widget/widget.js')) : time()),
+            'widget_iframe_url' => route('widget.iframe', ['clientCode' => $client->unique_code]),
+            'iframe_settings' => $this->transformIframeEmbedSettings($client),
             'status' => $request->session()->get('status'),
             'lead_count' => $client->leads()->count(),
         ]);
@@ -286,6 +288,41 @@ class ClientController extends Controller
         \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
 
         return to_route('clients.show', $client)->with('status', 'client-updated');
+    }
+
+    /**
+     * Update only iframe embed builder settings for a client workspace.
+     */
+    public function updateIframeSettings(Request $request, Client $client): RedirectResponse
+    {
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'width' => ['required', 'integer', 'min:200', 'max:1600'],
+            'height' => ['required', 'integer', 'min:240', 'max:2000'],
+            'max_width' => ['required', 'integer', 'min:200', 'max:2000'],
+            'border_radius' => ['required', 'integer', 'min:0', 'max:48'],
+            'loading' => ['required', 'in:lazy,eager'],
+            'referrer_policy' => ['required', 'in:origin,no-referrer,strict-origin-when-cross-origin'],
+        ]);
+
+        $settings = Collection::make($client->widget_settings)->toArray();
+        $settings['iframe'] = [
+            'title' => $validated['title'],
+            'width' => (int) $validated['width'],
+            'height' => (int) $validated['height'],
+            'max_width' => (int) $validated['max_width'],
+            'border_radius' => (int) $validated['border_radius'],
+            'loading' => $validated['loading'],
+            'referrer_policy' => $validated['referrer_policy'],
+        ];
+
+        $client->update([
+            'widget_settings' => $settings,
+        ]);
+
+        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
+
+        return back()->with('status', 'iframe-settings-updated');
     }
 
     /**
@@ -527,6 +564,31 @@ class ClientController extends Controller
                 'show_branding' => (bool) $settings->get('show_branding', true),
             ],
             'created_at' => $client->created_at?->toDateTimeString(),
+        ];
+    }
+
+    /**
+     * Transform iframe embed builder settings with safe defaults.
+     *
+     * @return array<string, mixed>
+     */
+    private function transformIframeEmbedSettings(Client $client): array
+    {
+        $iframe = Collection::make(Collection::make($client->widget_settings)->get('iframe', []));
+        $width = (int) $iframe->get('width', 400);
+
+        return [
+            'title' => (string) $iframe->get('title', 'Chat assistant'),
+            'width' => $width > 0 ? $width : 400,
+            'height' => (int) $iframe->get('height', 640) ?: 640,
+            'max_width' => (int) $iframe->get('max_width', $width > 0 ? $width : 400),
+            'border_radius' => (int) $iframe->get('border_radius', 0),
+            'loading' => in_array($iframe->get('loading'), ['lazy', 'eager'], true) ? $iframe->get('loading') : 'lazy',
+            'referrer_policy' => in_array(
+                $iframe->get('referrer_policy'),
+                ['origin', 'no-referrer', 'strict-origin-when-cross-origin'],
+                true
+            ) ? $iframe->get('referrer_policy') : 'origin',
         ];
     }
 

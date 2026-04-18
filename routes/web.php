@@ -6,10 +6,14 @@ use App\Http\Controllers\Admin\KnowledgeSourceController;
 use App\Http\Controllers\Admin\LeadController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Widget\IframeWidgetController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/login')->name('home');
+
+Route::get('widget/iframe/{clientCode}', [IframeWidgetController::class, 'show'])
+    ->name('widget.iframe');
 
 
 
@@ -28,6 +32,7 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::get('clients/{client}/cache-entries', [ClientController::class, 'cacheEntries'])->name('clients.cache-entries');
     Route::delete('clients/{client}/cache-entries', [ClientController::class, 'clearCache'])->name('clients.cache-entries.clear');
     Route::delete('clients/{client}/cache-entries/{cacheEntry}', [ClientController::class, 'destroyCacheEntry'])->name('clients.cache-entries.destroy');
+    Route::patch('clients/{client}/iframe-settings', [ClientController::class, 'updateIframeSettings'])->name('clients.iframe-settings.update');
     Route::patch('clients/{client}', [ClientController::class, 'update'])->name('clients.update');
     Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('clients.destroy');
 

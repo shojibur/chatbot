@@ -51,6 +51,19 @@ type Props = {
     memory_summary: MemorySummary;
     knowledge_source_types: string[];
     widget_script_url: string;
+    widget_iframe_url: string;
+    iframe_settings: {
+        title: string;
+        width: number;
+        height: number;
+        max_width: number;
+        border_radius: number;
+        loading: 'lazy' | 'eager';
+        referrer_policy:
+            | 'origin'
+            | 'no-referrer'
+            | 'strict-origin-when-cross-origin';
+    };
     status?: string;
     lead_count?: number;
 };
@@ -223,6 +236,95 @@ const embedSnippet = computed(
         `<script src="${props.widget_script_url}" data-client-code="${props.client.unique_code}" async><\/script>`,
 );
 
+const iframeTitle = ref(props.iframe_settings.title || 'Chat assistant');
+const iframeWidth = ref(props.iframe_settings.width || 400);
+const iframeHeight = ref(props.iframe_settings.height || 640);
+const iframeMaxWidth = ref(props.iframe_settings.max_width || 400);
+const iframeBorderRadius = ref(props.iframe_settings.border_radius ?? 0);
+const iframeLoading = ref<'lazy' | 'eager'>(props.iframe_settings.loading || 'lazy');
+const iframeReferrerPolicy = ref<
+    'origin' | 'no-referrer' | 'strict-origin-when-cross-origin'
+>(props.iframe_settings.referrer_policy || 'origin');
+
+function clampInt(
+    value: number,
+    min: number,
+    max: number,
+    fallback: number,
+): number {
+    if (!Number.isFinite(value)) {
+        return fallback;
+    }
+
+    return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function escapeHtmlAttribute(value: string): string {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+}
+
+const iframeOptions = computed(() => {
+    const width = clampInt(iframeWidth.value, 200, 1600, 400);
+    const height = clampInt(iframeHeight.value, 240, 2000, 640);
+    const maxWidth = clampInt(iframeMaxWidth.value, 200, 2000, width);
+    const borderRadius = clampInt(iframeBorderRadius.value, 0, 48, 0);
+    const titleRaw = (iframeTitle.value || 'Chat assistant').trim();
+
+    const style = [
+        'width:100%',
+        `max-width:${maxWidth}px`,
+        `height:${height}px`,
+        'border:0',
+        `border-radius:${borderRadius}px`,
+        'overflow:hidden',
+    ].join(';');
+
+    return {
+        width,
+        height,
+        maxWidth,
+        borderRadius,
+        style,
+        title: escapeHtmlAttribute(titleRaw),
+        titleRaw,
+    };
+});
+
+const iframeSnippet = computed(
+    () =>
+        `<iframe src="${props.widget_iframe_url}" title="${iframeOptions.value.title}" width="${iframeOptions.value.width}" height="${iframeOptions.value.height}" style="${iframeOptions.value.style}" loading="${iframeLoading.value}" referrerpolicy="${iframeReferrerPolicy.value}"></iframe>`,
+);
+
+const iframeBuilderOpen = ref(false);
+const savingIframeSettings = ref(false);
+
+function saveIframeSettings(): void {
+    savingIframeSettings.value = true;
+
+    router.patch(
+        `/clients/${props.client.id}/iframe-settings`,
+        {
+            title: iframeOptions.value.titleRaw,
+            width: iframeOptions.value.width,
+            height: iframeOptions.value.height,
+            max_width: iframeOptions.value.maxWidth,
+            border_radius: iframeOptions.value.borderRadius,
+            loading: iframeLoading.value,
+            referrer_policy: iframeReferrerPolicy.value,
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                savingIframeSettings.value = false;
+            },
+        },
+    );
+}
+
 function formatCurrency(value: number): string {
     return `$${value.toFixed(4)}`;
 }
@@ -258,6 +360,8 @@ const statusMessage = computed(() => {
         return 'Knowledge source queued for reprocessing.';
     if (props.status === 'knowledge-source-duplicate')
         return 'This knowledge source already exists.';
+    if (props.status === 'iframe-settings-updated')
+        return 'Iframe settings saved.';
     return null;
 });
 
@@ -937,25 +1041,35 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
             </Card>
 
             <!-- Config section -->
-            <section class="grid gap-6">
-                <div class="grid gap-6">
+            <section class="grid min-w-0 gap-6">
+                <div class="grid min-w-0 gap-6">
                     <!-- Config summary -->
-                    <Card class="gap-0 border-sidebar-border/70">
+                    <Card class="min-w-0 gap-0 border-sidebar-border/70">
                         <CardHeader class="border-b border-sidebar-border/70">
                             <h2 class="text-lg font-semibold">Configuration</h2>
                         </CardHeader>
-                        <CardContent class="space-y-4 pt-6 text-sm">
-                            <!-- Install snippet -->
-                            <div>
+                        <CardContent class="min-w-0 space-y-4 pt-6 text-sm">
+                            <!-- Script install snippet -->
+                            <div class="min-w-0">
                                 <div
                                     class="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase"
                                 >
                                     <Bot class="size-3.5" />
-                                    Install snippet
+                                    Script snippet
                                 </div>
-                                <pre
-                                    class="mt-2 overflow-x-auto rounded-lg bg-slate-950 px-3 py-2.5 text-xs text-slate-100"
-                                ><code>{{ embedSnippet }}</code></pre>
+                                <div
+                                    class="mt-2 max-w-full overflow-x-auto rounded-lg bg-slate-950 [-webkit-overflow-scrolling:touch]"
+                                >
+                                    <pre
+                                        class="w-max min-w-full px-3 py-2.5 text-xs text-slate-100"
+                                    ><code class="whitespace-nowrap">{{ embedSnippet }}</code></pre>
+                                </div>
+                                <p
+                                    class="mt-2 text-xs text-muted-foreground"
+                                >
+                                    Need iframe instead of script embed? Use the
+                                    dedicated Iframe Embed Builder below.
+                                </p>
                             </div>
 
                             <!-- Package + AI config -->
@@ -1084,6 +1198,223 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     </Badge>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Iframe embed builder -->
+                    <Card class="min-w-0 gap-0 border-sidebar-border/70">
+                        <CardHeader class="border-b border-sidebar-border/70">
+                            <div
+                                class="flex flex-wrap items-start justify-between gap-3"
+                            >
+                                <div>
+                                    <h2 class="text-lg font-semibold">
+                                        Iframe Embed Builder
+                                    </h2>
+                                    <p class="text-sm text-muted-foreground">
+                                        Configure iframe settings, copy snippet,
+                                        and verify with live preview.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="iframeBuilderOpen = !iframeBuilderOpen"
+                                >
+                                    <ChevronUp
+                                        v-if="iframeBuilderOpen"
+                                        class="mr-1 size-3.5"
+                                    />
+                                    <ChevronDown v-else class="mr-1 size-3.5" />
+                                    {{
+                                        iframeBuilderOpen
+                                            ? 'Collapse'
+                                            : 'Expand'
+                                    }}
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent
+                            v-if="iframeBuilderOpen"
+                            class="min-w-0 space-y-5 pt-6 text-sm"
+                        >
+                            <div class="min-w-0">
+                                <div
+                                    class="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                                >
+                                    <Bot class="size-3.5" />
+                                    Iframe snippet
+                                </div>
+                                <div
+                                    class="mt-2 max-w-full overflow-x-auto rounded-lg bg-slate-950 [-webkit-overflow-scrolling:touch]"
+                                >
+                                    <pre
+                                        class="w-max min-w-full px-3 py-2.5 text-xs text-slate-100"
+                                    ><code class="whitespace-nowrap">{{ iframeSnippet }}</code></pre>
+                                </div>
+                                <p class="mt-2 text-xs text-muted-foreground">
+                                    Snippet updates live based on options. Use
+                                    horizontal scroll to view full line.
+                                </p>
+                            </div>
+
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_title"
+                                        >Iframe title</Label
+                                    >
+                                    <Input
+                                        id="iframe_title"
+                                        v-model="iframeTitle"
+                                        placeholder="Chat assistant"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_width"
+                                        >Width (px)</Label
+                                    >
+                                    <Input
+                                        id="iframe_width"
+                                        v-model.number="iframeWidth"
+                                        type="number"
+                                        min="200"
+                                        max="1600"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_height"
+                                        >Height (px)</Label
+                                    >
+                                    <Input
+                                        id="iframe_height"
+                                        v-model.number="iframeHeight"
+                                        type="number"
+                                        min="240"
+                                        max="2000"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_max_width"
+                                        >Max width (px)</Label
+                                    >
+                                    <Input
+                                        id="iframe_max_width"
+                                        v-model.number="iframeMaxWidth"
+                                        type="number"
+                                        min="200"
+                                        max="2000"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_radius"
+                                        >Border radius (px)</Label
+                                    >
+                                    <Input
+                                        id="iframe_radius"
+                                        v-model.number="iframeBorderRadius"
+                                        type="number"
+                                        min="0"
+                                        max="48"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_loading">Loading</Label>
+                                    <select
+                                        id="iframe_loading"
+                                        v-model="iframeLoading"
+                                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                        <option value="lazy">lazy</option>
+                                        <option value="eager">eager</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1.5 sm:col-span-2">
+                                    <Label for="iframe_referrer_policy"
+                                        >Referrer policy</Label
+                                    >
+                                    <select
+                                        id="iframe_referrer_policy"
+                                        v-model="iframeReferrerPolicy"
+                                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                        <option value="origin">origin</option>
+                                        <option
+                                            value="strict-origin-when-cross-origin"
+                                        >
+                                            strict-origin-when-cross-origin
+                                        </option>
+                                        <option value="no-referrer">
+                                            no-referrer
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div
+                                class="flex flex-wrap items-center justify-end gap-2"
+                            >
+                                <span
+                                    v-if="props.status === 'iframe-settings-updated'"
+                                    class="text-xs font-medium text-emerald-600"
+                                >
+                                    Saved
+                                </span>
+                                <Button
+                                    size="sm"
+                                    :disabled="savingIframeSettings"
+                                    @click="saveIframeSettings"
+                                >
+                                    <Loader2
+                                        v-if="savingIframeSettings"
+                                        class="mr-1 size-3.5 animate-spin"
+                                    />
+                                    {{
+                                        savingIframeSettings
+                                            ? 'Saving...'
+                                            : 'Save Iframe Settings'
+                                    }}
+                                </Button>
+                            </div>
+
+                            <div>
+                                <div
+                                    class="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                                >
+                                    <Eye class="size-3.5" />
+                                    Preview
+                                </div>
+                                <div
+                                    class="mt-2 rounded-xl border border-dashed border-sidebar-border/70 bg-muted/20 p-4"
+                                >
+                                    <iframe
+                                        :src="props.widget_iframe_url"
+                                        :title="iframeOptions.titleRaw"
+                                        :width="iframeOptions.width"
+                                        :height="iframeOptions.height"
+                                        :loading="iframeLoading"
+                                        :referrerpolicy="iframeReferrerPolicy"
+                                        :style="{
+                                            width: '100%',
+                                            maxWidth: `${iframeOptions.maxWidth}px`,
+                                            height: `${iframeOptions.height}px`,
+                                            border: '0',
+                                            borderRadius: `${iframeOptions.borderRadius}px`,
+                                            overflow: 'hidden',
+                                            background: '#fff',
+                                            display: 'block',
+                                        }"
+                                        class="mx-auto shadow-sm"
+                                    ></iframe>
+                                </div>
+                            </div>
+                        </CardContent>
+                        <CardContent
+                            v-else
+                            class="pt-5 text-sm text-muted-foreground"
+                        >
+                            Iframe builder is collapsed. Click
+                            <span class="font-medium">Expand</span> to edit
+                            options and preview.
                         </CardContent>
                     </Card>
                 </div>

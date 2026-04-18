@@ -1,0 +1,646 @@
+<template>
+    <div class="davey-iframe-widget">
+        <div class="davey-iframe-panel">
+            <div class="davey-iframe-header" :style="{ background: primaryColor }">
+                <div class="davey-iframe-header-info">
+                    <span class="davey-iframe-header-title">{{ config.name || 'Chat' }}</span>
+                    <span class="davey-iframe-header-status">
+                        <span class="davey-iframe-header-dot"></span>
+                        Online now
+                    </span>
+                </div>
+            </div>
+
+            <div ref="messagesEl" class="davey-iframe-messages">
+                <div
+                    v-for="(msg, i) in messages"
+                    :key="i"
+                    :class="['davey-iframe-msg', `davey-iframe-msg-${msg.role}`, msg.isLead ? 'davey-iframe-msg-lead' : '']"
+                >
+                    <div
+                        class="davey-iframe-msg-bubble"
+                        :style="
+                            msg.role === 'assistant'
+                                ? msg.isLead
+                                    ? { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a' }
+                                    : {}
+                                : { background: accentColor, color: '#fff' }
+                        "
+                    >
+                        <div
+                            v-if="msg.role === 'assistant'"
+                            class="davey-iframe-markdown"
+                            v-html="parseMessage(msg.content)"
+                        ></div>
+                        <div v-else class="davey-iframe-user-text">
+                            {{ msg.content }}
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="loading" class="davey-iframe-msg davey-iframe-msg-assistant">
+                    <div class="davey-iframe-msg-bubble davey-iframe-typing">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="davey-iframe-input-area">
+                <input
+                    v-model="input"
+                    type="text"
+                    class="davey-iframe-input"
+                    :placeholder="inputPlaceholder"
+                    :disabled="loading || leadStep === 'done'"
+                    @keydown.enter="send"
+                />
+                <button
+                    class="davey-iframe-send"
+                    :style="{ background: primaryColor }"
+                    :disabled="!input.trim() || loading || leadStep === 'done'"
+                    @click="send"
+                >
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+            </div>
+
+            <div
+                v-if="config.widget_settings?.show_branding !== false"
+                class="davey-iframe-branding"
+            >
+                Powered By zaochat.com
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
+import { computed, nextTick, onMounted, ref } from 'vue';
+
+interface WidgetConfig {
+    name: string;
+    widget_style: string;
+    widget_settings: {
+        primary_color?: string;
+        accent_color?: string;
+        welcome_message?: string;
+        toggle_text?: string;
+        position?: string;
+        show_branding?: boolean;
+    };
+    welcome_message: string;
+}
+
+interface Message {
+    role: 'user' | 'assistant';
+    content: string;
+    isLead?: boolean;
+}
+
+type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
+
+const props = defineProps<{
+    clientCode: string;
+    apiBase: string;
+    config: WidgetConfig;
+    parentPageUrl: string;
+}>();
+
+const input = ref('');
+const loading = ref(false);
+const messagesEl = ref<HTMLElement | null>(null);
+const leadStep = ref<LeadStep>(null);
+const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+
+const storagePrefix = `davey_iframe_${props.clientCode}`;
+const messagesStorageKey = `${storagePrefix}_messages`;
+const sessionStorageKey = `${storagePrefix}_session_token`;
+const leadCapturedStorageKey = `${storagePrefix}_lead_captured`;
+
+const messages = ref<Message[]>(readMessages());
+const sessionToken = ref<string | null>(readStorage(sessionStorageKey));
+const leadCapturedThisSession = ref(
+    readStorage(leadCapturedStorageKey) === 'true',
+);
+
+const primaryColor = computed(
+    () => props.config.widget_settings?.primary_color || '#1f2937',
+);
+const accentColor = computed(
+    () => props.config.widget_settings?.accent_color || '#0f766e',
+);
+
+const inputPlaceholder = computed(() => {
+    if (leadStep.value === 'ask_name') return 'Enter your name...';
+    if (leadStep.value === 'ask_contact') return 'Phone number or email...';
+    if (leadStep.value === 'ask_notes') return 'Briefly describe what you need...';
+    if (leadStep.value === 'done') return 'Thank you';
+    return 'Type a message...';
+});
+
+onMounted(() => {
+    const welcome =
+        props.config.welcome_message ||
+        props.config.widget_settings?.welcome_message;
+
+    if (welcome && messages.value.length === 0) {
+        messages.value.push({ role: 'assistant', content: welcome });
+        saveMessages();
+    }
+});
+
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
+
+function readStorage(key: string): string | null {
+    try {
+        return sessionStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function writeStorage(key: string, value: string): void {
+    try {
+        sessionStorage.setItem(key, value);
+    } catch {
+        // no-op when storage is blocked
+    }
+}
+
+function readMessages(): Message[] {
+    const raw = readStorage(messagesStorageKey);
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveMessages() {
+    writeStorage(messagesStorageKey, JSON.stringify(messages.value));
+}
+
+function parseMessage(text: string) {
+    if (!text) return '';
+
+    const rawHtml = marked.parse(text) as string;
+
+    return DOMPurify.sanitize(rawHtml, {
+        ALLOWED_TAGS: [
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        ],
+    });
+}
+
+function addBotMessage(content: string, isLead = false) {
+    messages.value.push({ role: 'assistant', content, isLead });
+    saveMessages();
+    scrollToBottom();
+}
+
+function userIsRefusing(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    const refusalPatterns = [
+        'no', 'nah', 'nope', 'not', "don't", 'dont', 'do not',
+        'i refuse', 'skip', 'pass', 'never mind', 'nevermind',
+        'forget it', 'stop', 'cancel', "i'd rather not", 'i rather not',
+        'no thanks', 'not interested', 'leave me alone',
+        'i do not want', 'i dont want', 'prefer not', 'rather not', 'not now',
+    ];
+    return refusalPatterns.some((p) => lower.includes(p));
+}
+
+function cancelLeadCapture() {
+    leadStep.value = null;
+    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    addBotMessage(
+        'No problem. You can continue chatting, and I can still help here.',
+        true,
+    );
+}
+
+async function handleLeadStep(text: string): Promise<boolean> {
+    if (!leadStep.value || leadStep.value === 'done') return false;
+
+    messages.value.push({ role: 'user', content: text });
+    saveMessages();
+    scrollToBottom();
+
+    if (userIsRefusing(text)) {
+        cancelLeadCapture();
+        return true;
+    }
+
+    if (leadStep.value === 'ask_name') {
+        leadData.value.name = text;
+        leadStep.value = 'ask_contact';
+        addBotMessage(
+            `Thanks ${leadData.value.name}. What is the best phone number or email to reach you?`,
+            true,
+        );
+        return true;
+    }
+
+    if (leadStep.value === 'ask_contact') {
+        leadData.value.contact = text;
+        leadStep.value = 'ask_notes';
+        addBotMessage(
+            'Got it. Please briefly describe what you need help with.',
+            true,
+        );
+        return true;
+    }
+
+    if (leadStep.value === 'ask_notes') {
+        leadData.value.notes = text;
+        leadStep.value = 'done';
+        loading.value = true;
+        scrollToBottom();
+
+        try {
+            await saveLead();
+            leadCapturedThisSession.value = true;
+            writeStorage(leadCapturedStorageKey, 'true');
+            addBotMessage(
+                'Thank you. Our team will contact you soon.',
+                true,
+            );
+        } catch {
+            addBotMessage(
+                'There was a problem saving your details. Please try again shortly.',
+                true,
+            );
+        } finally {
+            loading.value = false;
+            setTimeout(() => {
+                leadStep.value = null;
+                leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+            }, 4000);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+async function saveLead() {
+    const body: Record<string, string> = {
+        client_code: props.clientCode,
+        name: leadData.value.name,
+        contact: leadData.value.contact,
+        user_request: leadData.value.triggerMessage,
+        notes: leadData.value.notes,
+        trigger: 'intent',
+    };
+
+    if (sessionToken.value) {
+        body.session_token = sessionToken.value;
+    }
+
+    const res = await fetch(`${props.apiBase}/api/v1/leads`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+        throw new Error('Lead save failed');
+    }
+}
+
+async function send() {
+    const text = input.value.trim();
+    if (!text || loading.value) return;
+
+    input.value = '';
+
+    if (leadStep.value && leadStep.value !== 'done') {
+        await handleLeadStep(text);
+        return;
+    }
+
+    messages.value.push({ role: 'user', content: text });
+    saveMessages();
+    loading.value = true;
+    scrollToBottom();
+
+    try {
+        const body: Record<string, string> = {
+            client_code: props.clientCode,
+            message: text,
+            page_url: props.parentPageUrl || window.location.href,
+        };
+
+        if (sessionToken.value) {
+            body.session_token = sessionToken.value;
+        }
+
+        const res = await fetch(`${props.apiBase}/api/v1/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.answer) {
+            messages.value.push({ role: 'assistant', content: data.answer });
+            saveMessages();
+
+            if (data.session_token) {
+                sessionToken.value = data.session_token;
+                writeStorage(sessionStorageKey, data.session_token);
+            }
+
+            if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
+                leadData.value.triggerMessage = text;
+                leadStep.value = 'ask_name';
+
+                setTimeout(() => {
+                    addBotMessage(
+                        'I can help with that. May I have your name so our team can follow up?',
+                        true,
+                    );
+                }, 600);
+            }
+        } else {
+            messages.value.push({
+                role: 'assistant',
+                content: data.error || 'Something went wrong. Please try again.',
+            });
+            saveMessages();
+        }
+    } catch {
+        messages.value.push({
+            role: 'assistant',
+            content: 'Unable to connect. Please check your internet connection.',
+        });
+        saveMessages();
+    } finally {
+        loading.value = false;
+        scrollToBottom();
+    }
+}
+
+function scrollToBottom() {
+    nextTick(() => {
+        if (messagesEl.value) {
+            messagesEl.value.scrollTop = messagesEl.value.scrollHeight;
+        }
+    });
+}
+</script>
+
+<style scoped>
+.davey-iframe-widget {
+    width: 100%;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+        Arial, sans-serif;
+    color: #111827;
+    background: #ffffff;
+}
+
+.davey-iframe-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.davey-iframe-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.davey-iframe-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.davey-iframe-header-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.davey-iframe-header-status {
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.92;
+}
+
+.davey-iframe-header-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #34d399;
+}
+
+.davey-iframe-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    background: #f9fafb;
+}
+
+.davey-iframe-msg {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.davey-iframe-msg-user {
+    justify-content: flex-end;
+}
+
+.davey-iframe-msg-assistant {
+    justify-content: flex-start;
+}
+
+.davey-iframe-msg-bubble {
+    max-width: 85%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.45;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.davey-iframe-user-text {
+    white-space: pre-wrap;
+}
+
+.davey-iframe-input-area {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
+    flex-shrink: 0;
+}
+
+.davey-iframe-input {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+}
+
+.davey-iframe-input:focus {
+    border-color: #9ca3af;
+}
+
+.davey-iframe-send {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 10px;
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.davey-iframe-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.davey-iframe-branding {
+    padding: 6px 10px 8px;
+    text-align: center;
+    font-size: 11px;
+    color: #6b7280;
+    border-top: 1px solid #f1f5f9;
+    background: #ffffff;
+}
+
+.davey-iframe-typing span {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin: 0 2px;
+    border-radius: 999px;
+    background: #9ca3af;
+    animation: davey-iframe-dot 1s infinite ease-in-out;
+}
+
+.davey-iframe-typing span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.davey-iframe-typing span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes davey-iframe-dot {
+    0%,
+    80%,
+    100% {
+        opacity: 0.35;
+        transform: translateY(0);
+    }
+    40% {
+        opacity: 1;
+        transform: translateY(-2px);
+    }
+}
+
+.davey-iframe-markdown {
+    font-size: inherit;
+    line-height: 1.5;
+}
+
+.davey-iframe-markdown p {
+    margin: 0 0 10px;
+}
+
+.davey-iframe-markdown p:last-child {
+    margin-bottom: 0;
+}
+
+.davey-iframe-markdown ul {
+    margin: 0 0 10px;
+    padding-left: 20px;
+    list-style-type: disc;
+}
+
+.davey-iframe-markdown ol {
+    margin: 0 0 10px;
+    padding-left: 20px;
+    list-style-type: decimal;
+}
+
+.davey-iframe-markdown li {
+    margin-bottom: 4px;
+}
+
+.davey-iframe-markdown a {
+    text-decoration: underline;
+}
+
+.davey-iframe-markdown code {
+    font-family: inherit;
+    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.davey-iframe-markdown pre {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 8px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.davey-iframe-markdown pre code {
+    background: transparent;
+    padding: 0;
+}
+</style>
