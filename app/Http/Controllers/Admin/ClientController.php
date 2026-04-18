@@ -597,7 +597,7 @@ class ClientController extends Controller
             'width' => $width > 0 ? $width : 400,
             'height' => (int) $iframe->get('height', 640) ?: 640,
             'max_width' => (int) $iframe->get('max_width', $width > 0 ? $width : 400),
-            'border_radius' => (int) $iframe->get('border_radius', 0),
+            'border_radius' => (int) $iframe->get('border_radius', 16),
             'widget_style' => in_array($iframe->get('widget_style'), Client::WIDGET_STYLES, true)
                 ? $iframe->get('widget_style')
                 : Client::WIDGET_STYLES[0],

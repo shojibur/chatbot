@@ -242,7 +242,7 @@ const iframeTitle = ref(props.iframe_settings.title || 'Chat assistant');
 const iframeWidth = ref(props.iframe_settings.width || 400);
 const iframeHeight = ref(props.iframe_settings.height || 640);
 const iframeMaxWidth = ref(props.iframe_settings.max_width || 400);
-const iframeBorderRadius = ref(props.iframe_settings.border_radius ?? 0);
+const iframeBorderRadius = ref(props.iframe_settings.border_radius ?? 16);
 const iframeWidgetStyle = ref<'classic' | 'modern' | 'glass'>(
     props.iframe_settings.widget_style || 'classic',
 );
