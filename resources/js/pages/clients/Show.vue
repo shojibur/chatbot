@@ -360,8 +360,6 @@ const statusMessage = computed(() => {
         return 'Knowledge source queued for reprocessing.';
     if (props.status === 'knowledge-source-duplicate')
         return 'This knowledge source already exists.';
-    if (props.status === 'iframe-settings-updated')
-        return 'Iframe settings saved.';
     return null;
 });
 
@@ -1350,30 +1348,40 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                 </div>
                             </div>
 
-                            <div
-                                class="flex flex-wrap items-center justify-end gap-2"
-                            >
+                            <div class="space-y-2">
+                                <div
+                                    class="flex flex-wrap items-center justify-end gap-2"
+                                >
+                                    <span
+                                        v-if="props.status === 'iframe-settings-updated'"
+                                        class="text-xs font-medium text-emerald-600"
+                                    >
+                                        Saved
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        :disabled="savingIframeSettings"
+                                        @click="saveIframeSettings"
+                                    >
+                                        <Loader2
+                                            v-if="savingIframeSettings"
+                                            class="mr-1 size-3.5 animate-spin"
+                                        />
+                                        {{
+                                            savingIframeSettings
+                                                ? 'Saving...'
+                                                : 'Save Iframe Settings'
+                                        }}
+                                    </Button>
+                                </div>
                                 <span
                                     v-if="props.status === 'iframe-settings-updated'"
-                                    class="text-xs font-medium text-emerald-600"
+                                    class="block text-right text-xs font-medium text-emerald-600"
                                 >
-                                    Saved
+                                    Iframe settings saved. Copy the updated
+                                    iframe code and paste it on your website
+                                    for changes to take effect.
                                 </span>
-                                <Button
-                                    size="sm"
-                                    :disabled="savingIframeSettings"
-                                    @click="saveIframeSettings"
-                                >
-                                    <Loader2
-                                        v-if="savingIframeSettings"
-                                        class="mr-1 size-3.5 animate-spin"
-                                    />
-                                    {{
-                                        savingIframeSettings
-                                            ? 'Saving...'
-                                            : 'Save Iframe Settings'
-                                    }}
-                                </Button>
                             </div>
 
                             <div>
