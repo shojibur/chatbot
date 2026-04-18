@@ -512,7 +512,7 @@ function scrollToBottom() {
     height: 100%;
     display: flex;
     flex-direction: column;
-    border: 1px solid #e5e7eb;
+    border: 0;
     overflow: hidden;
     background: #ffffff;
 }
@@ -535,7 +535,7 @@ function scrollToBottom() {
 
 .davey-iframe-style-glass .davey-iframe-panel {
     background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.55);
+    border: 0;
     box-shadow: 0 10px 32px rgba(2, 6, 23, 0.16);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
@@ -766,7 +766,7 @@ function scrollToBottom() {
 
 .davey-iframe-dark .davey-iframe-panel {
     background: #0f172a;
-    border-color: #1f2937;
+    border: 0;
     box-shadow: 0 12px 36px rgba(2, 6, 23, 0.55);
 }
 
@@ -830,7 +830,7 @@ function scrollToBottom() {
 
 .davey-iframe-dark.davey-iframe-style-modern .davey-iframe-panel {
     background: #0b1220;
-    border: 1px solid #1f2937;
+    border: 0;
 }
 
 .davey-iframe-dark.davey-iframe-style-modern .davey-iframe-messages {
@@ -839,7 +839,7 @@ function scrollToBottom() {
 
 .davey-iframe-dark.davey-iframe-style-glass .davey-iframe-panel {
     background: rgba(15, 23, 42, 0.8);
-    border-color: rgba(148, 163, 184, 0.35);
+    border: 0;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
 }
