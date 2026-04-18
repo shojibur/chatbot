@@ -58,6 +58,8 @@ type Props = {
         height: number;
         max_width: number;
         border_radius: number;
+        widget_style: 'classic' | 'modern' | 'glass';
+        theme_mode: 'system' | 'light' | 'dark';
         loading: 'lazy' | 'eager';
         referrer_policy:
             | 'origin'
@@ -241,6 +243,22 @@ const iframeWidth = ref(props.iframe_settings.width || 400);
 const iframeHeight = ref(props.iframe_settings.height || 640);
 const iframeMaxWidth = ref(props.iframe_settings.max_width || 400);
 const iframeBorderRadius = ref(props.iframe_settings.border_radius ?? 0);
+const iframeWidgetStyle = ref<'classic' | 'modern' | 'glass'>(
+    props.iframe_settings.widget_style || 'classic',
+);
+const iframeWidgetStyles: Array<'classic' | 'modern' | 'glass'> = [
+    'classic',
+    'modern',
+    'glass',
+];
+const iframeThemeMode = ref<'system' | 'light' | 'dark'>(
+    props.iframe_settings.theme_mode || 'system',
+);
+const iframeThemeModes: Array<'system' | 'light' | 'dark'> = [
+    'system',
+    'light',
+    'dark',
+];
 const iframeLoading = ref<'lazy' | 'eager'>(props.iframe_settings.loading || 'lazy');
 const iframeReferrerPolicy = ref<
     'origin' | 'no-referrer' | 'strict-origin-when-cross-origin'
@@ -298,6 +316,13 @@ const iframeSnippet = computed(
     () =>
         `<iframe src="${props.widget_iframe_url}" title="${iframeOptions.value.title}" width="${iframeOptions.value.width}" height="${iframeOptions.value.height}" style="${iframeOptions.value.style}" loading="${iframeLoading.value}" referrerpolicy="${iframeReferrerPolicy.value}"></iframe>`,
 );
+const iframePreviewSrc = computed(() => {
+    const url = new URL(props.widget_iframe_url, window.location.origin);
+    url.searchParams.set('preview_iframe_style', iframeWidgetStyle.value);
+    url.searchParams.set('preview_iframe_theme', iframeThemeMode.value);
+
+    return url.toString();
+});
 
 const iframeBuilderOpen = ref(false);
 const savingIframeSettings = ref(false);
@@ -313,6 +338,8 @@ function saveIframeSettings(): void {
             height: iframeOptions.value.height,
             max_width: iframeOptions.value.maxWidth,
             border_radius: iframeOptions.value.borderRadius,
+            widget_style: iframeWidgetStyle.value,
+            theme_mode: iframeThemeMode.value,
             loading: iframeLoading.value,
             referrer_policy: iframeReferrerPolicy.value,
         },
@@ -1316,6 +1343,42 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     />
                                 </div>
                                 <div class="space-y-1.5">
+                                    <Label for="iframe_widget_style"
+                                        >Iframe style</Label
+                                    >
+                                    <select
+                                        id="iframe_widget_style"
+                                        v-model="iframeWidgetStyle"
+                                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                        <option
+                                            v-for="style in iframeWidgetStyles"
+                                            :key="style"
+                                            :value="style"
+                                        >
+                                            {{ style }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="iframe_theme_mode"
+                                        >Theme mode</Label
+                                    >
+                                    <select
+                                        id="iframe_theme_mode"
+                                        v-model="iframeThemeMode"
+                                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                        <option
+                                            v-for="mode in iframeThemeModes"
+                                            :key="mode"
+                                            :value="mode"
+                                        >
+                                            {{ mode }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1.5">
                                     <Label for="iframe_loading">Loading</Label>
                                     <select
                                         id="iframe_loading"
@@ -1395,7 +1458,7 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                     class="mt-2 rounded-xl border border-dashed border-sidebar-border/70 bg-muted/20 p-4"
                                 >
                                     <iframe
-                                        :src="props.widget_iframe_url"
+                                        :src="iframePreviewSrc"
                                         :title="iframeOptions.titleRaw"
                                         :width="iframeOptions.width"
                                         :height="iframeOptions.height"

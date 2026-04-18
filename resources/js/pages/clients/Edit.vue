@@ -11,6 +11,7 @@ type Props = {
     widget_styles: string[];
     client_statuses: string[];
     widget_positions: string[];
+    widget_theme_modes: string[];
     chat_models: string[];
     embedding_models: string[];
 };
@@ -48,6 +49,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                 :widget-styles="widget_styles"
                 :client-statuses="client_statuses"
                 :widget-positions="widget_positions"
+                :widget-theme-modes="widget_theme_modes"
                 :chat-models="chat_models"
                 :embedding-models="embedding_models"
                 :heading="`Edit ${client.name}`"

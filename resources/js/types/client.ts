@@ -37,6 +37,7 @@ export type WidgetSettings = {
     welcome_message: string;
     toggle_text?: string;
     position: string;
+    theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
 };
 
@@ -82,6 +83,7 @@ export type ClientFormRecord = {
     welcome_message: string;
     toggle_text: string;
     position: string;
+    theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
     notes: string;
 };

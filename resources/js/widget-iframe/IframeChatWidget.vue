@@ -1,5 +1,11 @@
 <template>
-    <div class="davey-iframe-widget">
+    <div
+        :class="[
+            'davey-iframe-widget',
+            `davey-iframe-style-${iframeStyle}`,
+            isDarkMode ? 'davey-iframe-dark' : '',
+        ]"
+    >
         <div class="davey-iframe-panel">
             <div class="davey-iframe-header" :style="{ background: primaryColor }">
                 <div class="davey-iframe-header-info">
@@ -22,7 +28,7 @@
                         :style="
                             msg.role === 'assistant'
                                 ? msg.isLead
-                                    ? { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a' }
+                                    ? leadMessageStyle
                                     : {}
                                 : { background: accentColor, color: '#fff' }
                         "
@@ -87,7 +93,7 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface WidgetConfig {
     name: string;
@@ -98,6 +104,11 @@ interface WidgetConfig {
         welcome_message?: string;
         toggle_text?: string;
         position?: string;
+        iframe?: {
+            widget_style?: 'classic' | 'modern' | 'glass';
+            theme_mode?: 'system' | 'light' | 'dark';
+        };
+        theme_mode?: 'system' | 'light' | 'dark';
         show_branding?: boolean;
     };
     welcome_message: string;
@@ -123,6 +134,8 @@ const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
 const leadStep = ref<LeadStep>(null);
 const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+const isDarkMode = ref(false);
+let darkModeMedia: MediaQueryList | null = null;
 
 const storagePrefix = `davey_iframe_${props.clientCode}`;
 const messagesStorageKey = `${storagePrefix}_messages`;
@@ -141,6 +154,32 @@ const primaryColor = computed(
 const accentColor = computed(
     () => props.config.widget_settings?.accent_color || '#0f766e',
 );
+const iframeStyle = computed<'classic' | 'modern' | 'glass'>(() => {
+    const style = props.config.widget_settings?.iframe?.widget_style;
+
+    return style === 'modern' || style === 'glass' ? style : 'classic';
+});
+const themeMode = computed<'system' | 'light' | 'dark'>(() => {
+    const mode =
+        props.config.widget_settings?.iframe?.theme_mode ??
+        props.config.widget_settings?.theme_mode;
+
+    return mode === 'dark' || mode === 'light' ? mode : 'system';
+});
+const leadMessageStyle = computed(() =>
+    isDarkMode.value
+        ? {
+            background:
+                'linear-gradient(135deg, rgba(30,41,59,0.98) 0%, rgba(15,23,42,0.98) 100%)',
+            border: '1px solid #334155',
+            color: '#f8fafc',
+        }
+        : {
+            background: '#eff6ff',
+            border: '1px solid #bfdbfe',
+            color: '#1e3a8a',
+        },
+);
 
 const inputPlaceholder = computed(() => {
     if (leadStep.value === 'ask_name') return 'Enter your name...';
@@ -151,6 +190,17 @@ const inputPlaceholder = computed(() => {
 });
 
 onMounted(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+        if (typeof darkModeMedia.addEventListener === 'function') {
+            darkModeMedia.addEventListener('change', syncDarkModePreference);
+        } else {
+            darkModeMedia.addListener(syncDarkModePreference);
+        }
+    }
+
+    syncDarkModePreference();
+
     const welcome =
         props.config.welcome_message ||
         props.config.widget_settings?.welcome_message;
@@ -160,6 +210,20 @@ onMounted(() => {
         saveMessages();
     }
 });
+
+onUnmounted(() => {
+    if (!darkModeMedia) {
+        return;
+    }
+
+    if (typeof darkModeMedia.removeEventListener === 'function') {
+        darkModeMedia.removeEventListener('change', syncDarkModePreference);
+    } else {
+        darkModeMedia.removeListener(syncDarkModePreference);
+    }
+});
+
+watch(themeMode, syncDarkModePreference);
 
 marked.setOptions({
     breaks: true,
@@ -211,6 +275,20 @@ function parseMessage(text: string) {
             'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
         ],
     });
+}
+
+function syncDarkModePreference() {
+    if (themeMode.value === 'dark') {
+        isDarkMode.value = true;
+        return;
+    }
+
+    if (themeMode.value === 'light') {
+        isDarkMode.value = false;
+        return;
+    }
+
+    isDarkMode.value = !!darkModeMedia?.matches;
 }
 
 function addBotMessage(content: string, isLead = false) {
@@ -439,6 +517,43 @@ function scrollToBottom() {
     background: #ffffff;
 }
 
+.davey-iframe-style-modern .davey-iframe-panel {
+    border: 0;
+    background: #f8fafc;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.davey-iframe-style-modern .davey-iframe-messages {
+    background: #eef2f7;
+}
+
+.davey-iframe-style-modern .davey-iframe-msg-bubble {
+    border-radius: 16px;
+    border-color: #dbe3ee;
+    background: #ffffff;
+}
+
+.davey-iframe-style-glass .davey-iframe-panel {
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 10px 32px rgba(2, 6, 23, 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.davey-iframe-style-glass .davey-iframe-messages {
+    background: rgba(248, 250, 252, 0.65);
+}
+
+.davey-iframe-style-glass .davey-iframe-msg-bubble {
+    background: rgba(255, 255, 255, 0.68);
+    border-color: rgba(203, 213, 225, 0.8);
+}
+
+.davey-iframe-style-glass .davey-iframe-input-area {
+    background: rgba(255, 255, 255, 0.78);
+}
+
 .davey-iframe-header {
     display: flex;
     align-items: center;
@@ -471,7 +586,7 @@ function scrollToBottom() {
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: #34d399;
+    background: #22c55e;
 }
 
 .davey-iframe-messages {
@@ -642,5 +757,103 @@ function scrollToBottom() {
 .davey-iframe-markdown pre code {
     background: transparent;
     padding: 0;
+}
+
+.davey-iframe-dark {
+    color: #f8fafc;
+    background: #0f172a;
+}
+
+.davey-iframe-dark .davey-iframe-panel {
+    background: #0f172a;
+    border-color: #1f2937;
+    box-shadow: 0 12px 36px rgba(2, 6, 23, 0.55);
+}
+
+.davey-iframe-dark .davey-iframe-messages {
+    background: #0b1220;
+}
+
+.davey-iframe-dark .davey-iframe-msg-bubble {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.davey-iframe-dark .davey-iframe-msg-user .davey-iframe-msg-bubble {
+    color: #fff;
+    border-color: transparent;
+}
+
+.davey-iframe-dark .davey-iframe-input-area {
+    background: #0f172a;
+    border-top-color: #1f2937;
+}
+
+.davey-iframe-dark .davey-iframe-input {
+    background: #111827;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.davey-iframe-dark .davey-iframe-input::placeholder {
+    color: #94a3b8;
+}
+
+.davey-iframe-dark .davey-iframe-input:focus {
+    border-color: #64748b;
+}
+
+.davey-iframe-dark .davey-iframe-branding {
+    border-top-color: #1f2937;
+    color: #94a3b8;
+    background: #0f172a;
+}
+
+.davey-iframe-dark .davey-iframe-markdown code,
+.davey-iframe-dark .davey-iframe-markdown pre {
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.davey-iframe-dark .davey-iframe-markdown,
+.davey-iframe-dark .davey-iframe-markdown a {
+    color: #f8fafc;
+}
+
+.davey-iframe-dark .davey-iframe-markdown a {
+    text-decoration-color: rgba(248, 250, 252, 0.65);
+}
+
+.davey-iframe-dark .davey-iframe-typing span {
+    background: #cbd5e1;
+}
+
+.davey-iframe-dark.davey-iframe-style-modern .davey-iframe-panel {
+    background: #0b1220;
+    border: 1px solid #1f2937;
+}
+
+.davey-iframe-dark.davey-iframe-style-modern .davey-iframe-messages {
+    background: #020817;
+}
+
+.davey-iframe-dark.davey-iframe-style-glass .davey-iframe-panel {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: rgba(148, 163, 184, 0.35);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.davey-iframe-dark.davey-iframe-style-glass .davey-iframe-messages {
+    background: rgba(2, 6, 23, 0.75);
+}
+
+.davey-iframe-dark.davey-iframe-style-glass .davey-iframe-msg-bubble {
+    background: rgba(30, 41, 59, 0.88);
+    border-color: #334155;
+}
+
+.davey-iframe-dark.davey-iframe-style-glass .davey-iframe-input-area {
+    background: rgba(15, 23, 42, 0.82);
 }
 </style>

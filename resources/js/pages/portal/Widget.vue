@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { Bot, Check, Palette, RotateCcw, Save } from 'lucide-vue-next';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import type { BreadcrumbItem } from '@/types';
 const props = defineProps<{
     widget_styles: string[];
     widget_positions: string[];
+    widget_theme_modes: string[];
     form: {
         widget_style: string;
         primary_color: string;
@@ -21,6 +22,7 @@ const props = defineProps<{
         welcome_message: string;
         toggle_text: string;
         position: string;
+        theme_mode: 'system' | 'light' | 'dark';
         show_branding: boolean;
     };
     status?: string;
@@ -35,6 +37,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 const form = reactive({ ...props.form });
 const errors = ref<Record<string, string>>({});
 const saving = ref(false);
+const systemPrefersDark = ref(false);
+let previewMedia: MediaQueryList | null = null;
 
 const saved = computed(() => props.status === 'widget-updated');
 
@@ -66,11 +70,66 @@ function reset() {
     Object.assign(form, props.form);
 }
 
+function setThemeMode(mode: string) {
+    if (mode === 'system' || mode === 'light' || mode === 'dark') {
+        form.theme_mode = mode;
+    }
+}
+
 const styleLabels: Record<string, string> = {
     classic: 'Classic',
     modern:  'Modern',
     glass:   'Glass',
 };
+
+const themeModeLabels: Record<string, string> = {
+    system: 'System',
+    light: 'Light',
+    dark: 'Dark',
+};
+
+const previewIsDark = computed(() => {
+    if (form.theme_mode === 'dark') {
+        return true;
+    }
+
+    if (form.theme_mode === 'light') {
+        return false;
+    }
+
+    return systemPrefersDark.value;
+});
+
+function syncPreviewDarkMode() {
+    systemPrefersDark.value = !!previewMedia?.matches;
+}
+
+onMounted(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return;
+    }
+
+    previewMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    syncPreviewDarkMode();
+
+    if (typeof previewMedia.addEventListener === 'function') {
+        previewMedia.addEventListener('change', syncPreviewDarkMode);
+    } else {
+        previewMedia.addListener(syncPreviewDarkMode);
+    }
+});
+
+onUnmounted(() => {
+    if (!previewMedia) {
+        return;
+    }
+
+    if (typeof previewMedia.removeEventListener === 'function') {
+        previewMedia.removeEventListener('change', syncPreviewDarkMode);
+    } else {
+        previewMedia.removeListener(syncPreviewDarkMode);
+    }
+});
 </script>
 
 <template>
@@ -156,6 +215,24 @@ const styleLabels: Record<string, string> = {
                                         {{ p }}
                                     </button>
                                 </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label>Theme Mode</Label>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <button
+                                        v-for="mode in widget_theme_modes"
+                                        :key="mode"
+                                        class="rounded-xl border-2 p-3 text-sm font-medium transition-all"
+                                        :class="form.theme_mode === mode
+                                            ? 'border-primary bg-primary/5 text-primary'
+                                            : 'border-sidebar-border/50 text-muted-foreground hover:border-sidebar-border'"
+                                        @click="setThemeMode(mode)"
+                                    >
+                                        {{ themeModeLabels[mode] ?? mode }}
+                                    </button>
+                                </div>
+                                <InputError :message="errors.theme_mode" />
                             </div>
 
                             <!-- Colors -->
@@ -282,10 +359,11 @@ const styleLabels: Record<string, string> = {
                                     v-if="chatOpen"
                                     class="absolute bottom-16 w-72 overflow-hidden rounded-2xl shadow-2xl"
                                     :class="form.position === 'right' ? 'right-4' : 'left-4'"
-                                    :class2="form.widget_style === 'glass' ? 'backdrop-blur-md bg-white/70' : 'bg-white dark:bg-zinc-900'"
                                     :style="{
                                         backdropFilter: form.widget_style === 'glass' ? 'blur(12px)' : 'none',
-                                        background: form.widget_style === 'glass' ? 'rgba(255,255,255,0.75)' : undefined,
+                                        background: form.widget_style === 'glass'
+                                            ? (previewIsDark ? 'rgba(15,23,42,0.75)' : 'rgba(255,255,255,0.75)')
+                                            : (previewIsDark ? '#0f172a' : '#ffffff'),
                                         borderRadius: form.widget_style === 'modern' ? '1rem' : '0.75rem',
                                     }"
                                 >
@@ -303,7 +381,10 @@ const styleLabels: Record<string, string> = {
                                     </div>
 
                                     <!-- Messages -->
-                                    <div class="space-y-3 bg-zinc-50 dark:bg-zinc-800 p-3 text-xs max-h-52 overflow-y-auto">
+                                    <div
+                                        class="space-y-3 p-3 text-xs max-h-52 overflow-y-auto"
+                                        :class="previewIsDark ? 'bg-[#0b1220]' : 'bg-zinc-50'"
+                                    >
                                         <div
                                             v-for="(msg, i) in previewMessages"
                                             :key="i"
@@ -312,8 +393,14 @@ const styleLabels: Record<string, string> = {
                                         >
                                             <div
                                                 class="max-w-[85%] rounded-2xl px-3 py-1.5 text-xs"
-                                                :class="msg.role === 'user' ? 'text-white rounded-br-sm' : 'bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-bl-sm'"
-                                                :style="msg.role === 'user' ? { background: form.accent_color } : {}"
+                                                :class="msg.role === 'user'
+                                                    ? 'text-white rounded-br-sm'
+                                                    : (previewIsDark
+                                                        ? 'bg-[#1e293b] border border-[#334155] text-white rounded-bl-sm'
+                                                        : 'bg-white border border-zinc-200 text-zinc-900 rounded-bl-sm')"
+                                                :style="msg.role === 'user'
+                                                    ? { background: form.accent_color }
+                                                    : {}"
                                             >
                                                 {{ msg.content }}
                                             </div>
@@ -321,8 +408,16 @@ const styleLabels: Record<string, string> = {
                                     </div>
 
                                     <!-- Input -->
-                                    <div class="flex gap-1.5 border-t bg-white dark:bg-zinc-900 px-2 py-2">
-                                        <div class="flex-1 rounded-lg border bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1.5 text-[10px] text-muted-foreground">
+                                    <div
+                                        class="flex gap-1.5 border-t px-2 py-2"
+                                        :class="previewIsDark ? 'border-[#1f2937] bg-[#0f172a]' : 'bg-white'"
+                                    >
+                                        <div
+                                            class="flex-1 rounded-lg border px-2.5 py-1.5 text-[10px]"
+                                            :class="previewIsDark
+                                                ? 'border-[#334155] bg-[#111827] text-[#94a3b8]'
+                                                : 'bg-zinc-50 text-muted-foreground'"
+                                        >
                                             Type a message…
                                         </div>
                                         <button
@@ -334,7 +429,11 @@ const styleLabels: Record<string, string> = {
                                     </div>
 
                                     <!-- Branding -->
-                                    <div v-if="form.show_branding" class="bg-white dark:bg-zinc-900 py-1.5 text-center text-[9px] text-muted-foreground/60">
+                                    <div
+                                        v-if="form.show_branding"
+                                        class="py-1.5 text-center text-[9px]"
+                                        :class="previewIsDark ? 'bg-[#0f172a] text-[#94a3b8]' : 'bg-white text-muted-foreground/60'"
+                                    >
                                         Powered by Davey AI
                                     </div>
                                 </div>
@@ -345,6 +444,7 @@ const styleLabels: Record<string, string> = {
                         <div class="mt-3 flex items-center gap-2">
                             <Badge variant="outline" class="text-[10px]">{{ styleLabels[form.widget_style] }}</Badge>
                             <Badge variant="outline" class="text-[10px] capitalize">{{ form.position }}</Badge>
+                            <Badge variant="outline" class="text-[10px]">{{ themeModeLabels[form.theme_mode] }}</Badge>
                         </div>
                     </div>
                 </div>

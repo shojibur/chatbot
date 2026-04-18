@@ -1,6 +1,10 @@
 <template>
     <div
-        :class="['davey-widget', `davey-${config.widget_style}`]"
+        :class="[
+            'davey-widget',
+            `davey-${config.widget_style}`,
+            isDarkMode ? 'davey-dark' : '',
+        ]"
         :style="positionStyle"
     >
         <!-- Modern Style Pill -->
@@ -79,7 +83,7 @@
                         :style="
                             msg.role === 'assistant'
                                 ? msg.isLead
-                                    ? { background: 'linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%)', border: '1px solid #bdd8f5', color: '#1a3a5c' }
+                                    ? leadMessageStyle
                                     : {}
                                 : { background: accentColor, color: '#fff' }
                         "
@@ -145,7 +149,7 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { ref, nextTick, onMounted, computed } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue';
 
 interface WidgetConfig {
     name: string;
@@ -156,6 +160,7 @@ interface WidgetConfig {
         welcome_message?: string;
         toggle_text?: string;
         position?: string;
+        theme_mode?: 'system' | 'light' | 'dark';
         show_branding?: boolean;
     };
     welcome_message: string;
@@ -190,12 +195,34 @@ const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_to
 const leadStep = ref<LeadStep>(null);
 const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
 const leadCapturedThisSession = ref(sessionStorage.getItem('davey_lead_captured') === 'true');
+const isDarkMode = ref(false);
+let darkModeMedia: MediaQueryList | null = null;
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
 );
 const accentColor = computed(
     () => props.config.widget_settings?.accent_color || '#8b5cf6',
+);
+const themeMode = computed<'system' | 'light' | 'dark'>(() => {
+    const mode = props.config.widget_settings?.theme_mode;
+
+    return mode === 'dark' || mode === 'light' ? mode : 'system';
+});
+const leadMessageStyle = computed(() =>
+    isDarkMode.value
+        ? {
+            background:
+                'linear-gradient(135deg, rgba(30,41,59,0.98) 0%, rgba(15,23,42,0.98) 100%)',
+            border: '1px solid #334155',
+            color: '#f8fafc',
+        }
+        : {
+            background:
+                'linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%)',
+            border: '1px solid #bdd8f5',
+            color: '#1a3a5c',
+        },
 );
 
 const positionStyle = computed(() => {
@@ -231,6 +258,20 @@ function toggleOpen() {
     sessionStorage.setItem('davey_is_open', String(isOpen.value));
 }
 
+function syncDarkModePreference() {
+    if (themeMode.value === 'dark') {
+        isDarkMode.value = true;
+        return;
+    }
+
+    if (themeMode.value === 'light') {
+        isDarkMode.value = false;
+        return;
+    }
+
+    isDarkMode.value = !!darkModeMedia?.matches;
+}
+
 function saveMessages() {
     sessionStorage.setItem('davey_messages', JSON.stringify(messages.value));
 }
@@ -242,6 +283,17 @@ function addBotMessage(content: string, isLead = false) {
 }
 
 onMounted(() => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+        darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+        if (typeof darkModeMedia.addEventListener === 'function') {
+            darkModeMedia.addEventListener('change', syncDarkModePreference);
+        } else {
+            darkModeMedia.addListener(syncDarkModePreference);
+        }
+    }
+
+    syncDarkModePreference();
+
     const welcome =
         props.config.welcome_message ||
         props.config.widget_settings?.welcome_message;
@@ -251,6 +303,20 @@ onMounted(() => {
         saveMessages();
     }
 });
+
+onUnmounted(() => {
+    if (!darkModeMedia) {
+        return;
+    }
+
+    if (typeof darkModeMedia.removeEventListener === 'function') {
+        darkModeMedia.removeEventListener('change', syncDarkModePreference);
+    } else {
+        darkModeMedia.removeListener(syncDarkModePreference);
+    }
+});
+
+watch(themeMode, syncDarkModePreference);
 
 marked.setOptions({
     breaks: true,

@@ -31,6 +31,8 @@ import IframeChatWidget from './IframeChatWidget.vue';
     const apiBase =
         script.getAttribute('data-api-base') || new URL(script.src).origin;
     const parentPageUrl = document.referrer || window.location.href;
+    const iframeStyleOverride = script.getAttribute('data-iframe-style-override');
+    const iframeThemeOverride = script.getAttribute('data-iframe-theme-override');
 
     const configUrl = new URL(`${apiBase}/api/v1/widget-config/${clientCode}`);
     configUrl.searchParams.set('page_url', parentPageUrl);
@@ -44,6 +46,24 @@ import IframeChatWidget from './IframeChatWidget.vue';
             return res.json();
         })
         .then((config) => {
+            if (
+                iframeStyleOverride &&
+                ['classic', 'modern', 'glass'].includes(iframeStyleOverride)
+            ) {
+                config.widget_settings = config.widget_settings || {};
+                config.widget_settings.iframe = config.widget_settings.iframe || {};
+                config.widget_settings.iframe.widget_style = iframeStyleOverride;
+            }
+
+            if (
+                iframeThemeOverride &&
+                ['system', 'light', 'dark'].includes(iframeThemeOverride)
+            ) {
+                config.widget_settings = config.widget_settings || {};
+                config.widget_settings.iframe = config.widget_settings.iframe || {};
+                config.widget_settings.iframe.theme_mode = iframeThemeOverride;
+            }
+
             createApp({
                 render: () =>
                     h(IframeChatWidget, {

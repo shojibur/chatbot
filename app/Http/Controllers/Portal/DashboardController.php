@@ -95,6 +95,7 @@ class DashboardController extends Controller
                 'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
                 'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
                 'position' => $settings->get('position', 'right'),
+                'theme_mode' => $settings->get('theme_mode', 'system'),
                 'show_branding' => (bool) $settings->get('show_branding', true),
             ],
         ];

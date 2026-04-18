@@ -28,6 +28,12 @@
         data-client-code="{{ $clientCode }}"
         data-api-base="{{ $apiBase }}"
         data-mount-id="davey-iframe-root"
+        @if(!empty($iframeStyleOverride))
+        data-iframe-style-override="{{ $iframeStyleOverride }}"
+        @endif
+        @if(!empty($iframeThemeOverride))
+        data-iframe-theme-override="{{ $iframeThemeOverride }}"
+        @endif
         defer
     ></script>
 </body>

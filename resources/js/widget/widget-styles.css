@@ -358,3 +358,94 @@
     background: transparent;
     padding: 0;
 }
+
+/* Dark mode */
+.davey-dark .davey-panel {
+    background: #0f172a;
+    border-color: #1f2937;
+}
+
+.davey-dark.davey-classic .davey-panel,
+.davey-dark.davey-modern .davey-panel,
+.davey-dark.davey-glass .davey-panel {
+    background: #0f172a;
+    border: 1px solid #1f2937;
+    box-shadow: 0 12px 36px rgba(2, 6, 23, 0.55);
+}
+
+.davey-dark.davey-glass .davey-panel {
+    background: rgba(15, 23, 42, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.davey-dark .davey-toggle-pill {
+    background: rgba(15, 23, 42, 0.94);
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
+.davey-dark .davey-pill-text {
+    color: #f8fafc;
+}
+
+.davey-dark .davey-messages {
+    background: #0b1220;
+}
+
+.davey-dark .davey-msg-bubble {
+    color: #f8fafc;
+    border: 1px solid #334155;
+}
+
+.davey-dark.davey-classic .davey-msg-bubble,
+.davey-dark.davey-modern .davey-msg-bubble,
+.davey-dark.davey-glass .davey-msg-bubble {
+    background: #1e293b;
+    color: #f8fafc;
+}
+
+.davey-dark .davey-msg-user .davey-msg-bubble {
+    color: #fff;
+    border-color: transparent;
+}
+
+.davey-dark .davey-input-area {
+    background: #0f172a;
+    border-top-color: #1f2937;
+}
+
+.davey-dark .davey-input {
+    background: #111827;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+.davey-dark .davey-input::placeholder {
+    color: #94a3b8;
+}
+
+.davey-dark .davey-input:focus {
+    border-color: #64748b;
+}
+
+.davey-dark .davey-branding {
+    color: #94a3b8;
+}
+
+.davey-dark .davey-markdown code,
+.davey-dark .davey-markdown pre {
+    background: rgba(148, 163, 184, 0.15);
+}
+
+.davey-dark .davey-markdown,
+.davey-dark .davey-markdown a {
+    color: #f8fafc;
+}
+
+.davey-dark .davey-markdown a {
+    text-decoration-color: rgba(248, 250, 252, 0.65);
+}
+
+.davey-dark .davey-typing span {
+    background: #cbd5e1;
+}

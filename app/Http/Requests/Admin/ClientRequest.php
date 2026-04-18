@@ -47,6 +47,7 @@ abstract class ClientRequest extends FormRequest
             'welcome_message' => ['required', 'string', 'max:500'],
             'toggle_text' => ['required', 'string', 'max:50'],
             'position' => ['required', Rule::in(Client::WIDGET_POSITIONS)],
+            'theme_mode' => ['required', Rule::in(Client::WIDGET_THEME_MODES)],
             'show_branding' => ['required', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];

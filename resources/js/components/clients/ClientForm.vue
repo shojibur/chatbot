@@ -23,6 +23,7 @@ type Props = {
     widgetStyles: string[];
     clientStatuses: string[];
     widgetPositions: string[];
+    widgetThemeModes: string[];
     chatModels: string[];
     embeddingModels: string[];
     heading: string;
@@ -50,6 +51,12 @@ const widgetLabels: Record<string, string> = {
     classic: 'Classic',
     modern: 'Modern',
     glass: 'Glass',
+};
+
+const themeModeLabels: Record<string, string> = {
+    system: 'System',
+    light: 'Light',
+    dark: 'Dark',
 };
 
 const selectedPlan = computed(
@@ -533,6 +540,24 @@ function submit(): void {
                         </div>
 
                         <div class="grid gap-2">
+                            <Label for="theme_mode">Theme mode</Label>
+                            <select
+                                id="theme_mode"
+                                v-model="form.theme_mode"
+                                :class="selectClass"
+                            >
+                                <option
+                                    v-for="mode in widgetThemeModes"
+                                    :key="mode"
+                                    :value="mode"
+                                >
+                                    {{ themeModeLabels[mode] ?? mode }}
+                                </option>
+                            </select>
+                            <InputError :message="form.errors.theme_mode" />
+                        </div>
+
+                        <div class="grid gap-2">
                             <Label for="primary_color">Primary color</Label>
                             <Input
                                 id="primary_color"
@@ -627,12 +652,20 @@ function submit(): void {
                     >
                         <div class="mb-3 flex items-center justify-between">
                             <p class="text-sm font-medium">Widget preview</p>
-                            <Badge variant="outline">
-                                {{
-                                    widgetLabels[form.widget_style] ??
-                                    form.widget_style
-                                }}
-                            </Badge>
+                            <div class="flex items-center gap-1.5">
+                                <Badge variant="outline">
+                                    {{
+                                        widgetLabels[form.widget_style] ??
+                                        form.widget_style
+                                    }}
+                                </Badge>
+                                <Badge variant="outline">
+                                    {{
+                                        themeModeLabels[form.theme_mode] ??
+                                        form.theme_mode
+                                    }}
+                                </Badge>
+                            </div>
                         </div>
 
                         <div

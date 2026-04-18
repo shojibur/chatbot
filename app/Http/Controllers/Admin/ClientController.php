@@ -301,6 +301,8 @@ class ClientController extends Controller
             'height' => ['required', 'integer', 'min:240', 'max:2000'],
             'max_width' => ['required', 'integer', 'min:200', 'max:2000'],
             'border_radius' => ['required', 'integer', 'min:0', 'max:48'],
+            'widget_style' => ['required', 'in:'.implode(',', Client::WIDGET_STYLES)],
+            'theme_mode' => ['required', 'in:'.implode(',', Client::WIDGET_THEME_MODES)],
             'loading' => ['required', 'in:lazy,eager'],
             'referrer_policy' => ['required', 'in:origin,no-referrer,strict-origin-when-cross-origin'],
         ]);
@@ -312,6 +314,8 @@ class ClientController extends Controller
             'height' => (int) $validated['height'],
             'max_width' => (int) $validated['max_width'],
             'border_radius' => (int) $validated['border_radius'],
+            'widget_style' => $validated['widget_style'],
+            'theme_mode' => $validated['theme_mode'],
             'loading' => $validated['loading'],
             'referrer_policy' => $validated['referrer_policy'],
         ];
@@ -345,6 +349,19 @@ class ClientController extends Controller
     private function payload(StoreClientRequest|UpdateClientRequest $request): array
     {
         $validated = $request->validated();
+        $existingWidgetSettings = Collection::make(
+            optional($request->route('client'))->widget_settings
+        )->toArray();
+
+        $widgetSettings = array_merge($existingWidgetSettings, [
+            'primary_color' => $validated['primary_color'],
+            'accent_color' => $validated['accent_color'],
+            'welcome_message' => $validated['welcome_message'],
+            'toggle_text' => $validated['toggle_text'] ?? 'Ask anything about this business',
+            'position' => $validated['position'],
+            'theme_mode' => $validated['theme_mode'],
+            'show_branding' => $validated['show_branding'],
+        ]);
 
         return [
             'plan_id' => $validated['plan_id'],
@@ -363,14 +380,7 @@ class ClientController extends Controller
             'monthly_token_limit' => $validated['monthly_token_limit'],
             'status' => $validated['status'],
             'widget_style' => $validated['widget_style'],
-            'widget_settings' => [
-                'primary_color' => $validated['primary_color'],
-                'accent_color' => $validated['accent_color'],
-                'welcome_message' => $validated['welcome_message'],
-                'toggle_text' => $validated['toggle_text'] ?? 'Ask anything about this business',
-                'position' => $validated['position'],
-                'show_branding' => $validated['show_branding'],
-            ],
+            'widget_settings' => $widgetSettings,
             'notes' => $validated['notes'],
         ];
     }
@@ -402,6 +412,7 @@ class ClientController extends Controller
             'widget_styles' => Client::WIDGET_STYLES,
             'client_statuses' => Client::STATUSES,
             'widget_positions' => Client::WIDGET_POSITIONS,
+            'widget_theme_modes' => Client::WIDGET_THEME_MODES,
             'chat_models' => Client::CHAT_MODELS,
             'embedding_models' => Client::EMBEDDING_MODELS,
         ];
@@ -439,6 +450,7 @@ class ClientController extends Controller
             'welcome_message' => 'Ask us anything about pricing, support, or appointments.',
             'toggle_text' => 'Ask anything about this business',
             'position' => Client::WIDGET_POSITIONS[0],
+            'theme_mode' => Client::WIDGET_THEME_MODES[0],
             'show_branding' => true,
             'notes' => '',
         ];
@@ -473,6 +485,7 @@ class ClientController extends Controller
                 'primary_color' => $settings->get('primary_color', '#111827'),
                 'accent_color' => $settings->get('accent_color', '#0f766e'),
                 'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
+                'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
             ],
             'created_at' => $client->created_at?->toDateTimeString(),
         ];
@@ -510,6 +523,7 @@ class ClientController extends Controller
             'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
             'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
             'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
+            'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
             'show_branding' => (bool) $settings->get('show_branding', true),
             'notes' => $client->notes ?? '',
         ];
@@ -561,6 +575,7 @@ class ClientController extends Controller
                 'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
                 'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
                 'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
+                'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
                 'show_branding' => (bool) $settings->get('show_branding', true),
             ],
             'created_at' => $client->created_at?->toDateTimeString(),
@@ -583,6 +598,12 @@ class ClientController extends Controller
             'height' => (int) $iframe->get('height', 640) ?: 640,
             'max_width' => (int) $iframe->get('max_width', $width > 0 ? $width : 400),
             'border_radius' => (int) $iframe->get('border_radius', 0),
+            'widget_style' => in_array($iframe->get('widget_style'), Client::WIDGET_STYLES, true)
+                ? $iframe->get('widget_style')
+                : Client::WIDGET_STYLES[0],
+            'theme_mode' => in_array($iframe->get('theme_mode'), Client::WIDGET_THEME_MODES, true)
+                ? $iframe->get('theme_mode')
+                : Collection::make($client->widget_settings)->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
             'loading' => in_array($iframe->get('loading'), ['lazy', 'eager'], true) ? $iframe->get('loading') : 'lazy',
             'referrer_policy' => in_array(
                 $iframe->get('referrer_policy'),
