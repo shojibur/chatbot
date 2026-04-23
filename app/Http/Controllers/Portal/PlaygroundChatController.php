@@ -70,7 +70,7 @@ class PlaygroundChatController extends Controller
         $recentHistory    = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
-        $blockedCategory = $this->messagePolicyService->blockedCategory($client, $message);
+        $blockedCategory = $this->messagePolicyService->blockedCategory($message);
         if ($blockedCategory !== null) {
             $blockedAnswer = $this->messagePolicyService->blockedResponse($client);
             $this->chatHistoryService->logAssistantMessage(
