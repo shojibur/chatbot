@@ -11,6 +11,7 @@ use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\IntentDetectionService;
 use App\Services\RetrievalService;
+use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -29,6 +30,7 @@ class ChatController extends Controller
         private readonly ConversationCacheService $cacheService,
         private readonly ChatHistoryService $chatHistoryService,
         private readonly IntentDetectionService $intentService,
+        private readonly VisitorMessagePolicyService $messagePolicyService,
     ) {}
 
     public function chat(ChatRequest $request): JsonResponse
@@ -63,6 +65,26 @@ class ChatController extends Controller
         $chatSession = $this->chatHistoryService->resolveSession($client, $request);
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
+
+        $blockedCategory = $this->messagePolicyService->blockedCategory($client, $message);
+        if ($blockedCategory !== null) {
+            $blockedAnswer = $this->messagePolicyService->blockedResponse($client);
+            $this->chatHistoryService->logAssistantMessage(
+                $chatSession,
+                $blockedAnswer,
+                0,
+                false,
+                ['policy_blocked' => $blockedCategory]
+            );
+
+            return response()->json([
+                'answer' => $blockedAnswer,
+                'cached' => false,
+                'session_token' => $chatSession->session_token,
+                'lead_capture' => false,
+                'policy_blocked' => true,
+            ]);
+        }
 
         // If a lead was already captured for this session, never trigger again
         $leadAlreadyCaptured = Lead::where('chat_session_id', $chatSession->id)->exists();
