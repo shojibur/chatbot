@@ -7,6 +7,29 @@ use OpenAI\Laravel\Facades\OpenAI;
 class IntentDetectionService
 {
     /**
+     * Deterministic contact-intent phrases that should always trigger lead capture.
+     *
+     * These run before the AI classifier so clear requests like
+     * "how can I contact them?" trigger immediately and consistently.
+     *
+     * @var list<string>
+     */
+    private const DIRECT_CONTACT_PATTERNS = [
+        '/\bcontact\b/i',
+        '/\breach\s+(?:out|you|them)\b/i',
+        '/\bget\s+in\s+touch\b/i',
+        '/\bcall\s+(?:me|you|them)\b/i',
+        '/\bcall\s+back\b/i',
+        '/\bcallback\b/i',
+        '/\bspeak\s+to\s+(?:someone|a\s+person|a\s+human|your\s+team)\b/i',
+        '/\btalk\s+to\s+(?:someone|a\s+person|a\s+human|your\s+team)\b/i',
+        '/\bconnect\s+me\b/i',
+        '/\bhuman\s+(?:agent|support|help)\b/i',
+        '/\bphone\s+number\b/i',
+        '/\bemail\s+(?:address|you|them)\b/i',
+    ];
+
+    /**
      * Use a fast, cheap AI call to decide if lead capture should trigger.
      *
      * Analyses both the user's message and the chatbot's answer together,
@@ -17,6 +40,11 @@ class IntentDetectionService
      */
     public function shouldCaptureLead(string $userMessage, string $botAnswer): bool
     {
+        // Hard-rule: explicit contact intent should always trigger lead capture.
+        if ($this->hasDirectContactIntent($userMessage)) {
+            return true;
+        }
+
         $prompt = <<<PROMPT
 You are a lead-capture classifier for a business chatbot. Given the visitor's message and the bot's reply, decide if this visitor is ready to be contacted by the business.
 
@@ -60,5 +88,16 @@ PROMPT;
             // If the classification call fails, don't block the chat — just skip lead capture
             return false;
         }
+    }
+
+    private function hasDirectContactIntent(string $userMessage): bool
+    {
+        foreach (self::DIRECT_CONTACT_PATTERNS as $pattern) {
+            if (preg_match($pattern, $userMessage) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
