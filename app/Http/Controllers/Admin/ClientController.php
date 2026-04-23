@@ -434,7 +434,7 @@ class ClientController extends Controller
             'contact_email' => '',
             'website_url' => '',
             'business_description' => '',
-            'system_prompt' => 'Answer only from the approved knowledge base. If the answer is not in the knowledge base, say you do not know.',
+            'system_prompt' => 'Use approved knowledge base context first for business-specific facts. If the context does not cover a question, provide helpful general guidance, clearly label it as general information, and do not invent business-specific details.',
             'chat_model' => Client::CHAT_MODELS[0],
             'embedding_model' => Client::EMBEDDING_MODELS[0],
             'retrieval_chunk_count' => 3,

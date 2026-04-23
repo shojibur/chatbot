@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\Lead;
 use App\Models\UsageLog;
 use App\Services\ChatHistoryService;
@@ -11,10 +12,17 @@ use App\Services\IntentDetectionService;
 use App\Services\RetrievalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use OpenAI\Laravel\Facades\OpenAI;
 
 class PlaygroundChatController extends Controller
 {
+    private const PROMPT_POLICY_VERSION = 'v2-general-fallback';
+
+    private const LEGACY_KB_ONLY_PROMPT = 'answer only from the approved knowledge base. if the answer is not in the knowledge base, say you do not know';
+
+    private const LEGACY_KB_ONLY_PROMPT_CONTRACTION = "answer only from the approved knowledge base. if the answer is not in the knowledge base, say you don't know";
+
     public function __construct(
         private readonly RetrievalService $retrievalService,
         private readonly ConversationCacheService $cacheService,
@@ -48,7 +56,7 @@ class PlaygroundChatController extends Controller
 
         $message    = $validated['message'];
         $chatModel  = $client->chat_model ?? 'gpt-4o-mini';
-        $promptHash = hash('sha256', $client->system_prompt ?? '');
+        $promptHash = hash('sha256', $this->promptHashSeed($client));
 
         // Resolve/create a chat session using the playground session_id as identifier
         $sessionToken = 'playground-' . $validated['session_id'];
@@ -95,20 +103,7 @@ class PlaygroundChatController extends Controller
         $chunks      = $this->retrievalService->search($client, $searchQuery);
         $context     = $this->retrievalService->buildContext($chunks);
 
-        // Build system prompt
-        $rawPrompt  = $client->system_prompt
-            ?: 'You are a helpful assistant for ' . $client->name . '. Answer questions using the provided knowledge base context.';
-        $safePrompt = preg_replace(
-            '/(-{3,}|\[INST\]|\[\/INST\]|<\|im_start\|>|<\|im_end\|>|###\s*(system|user|assistant))/i',
-            '',
-            $rawPrompt
-        );
-
-        $guard = "\n\n[SECURITY] Follow the instructions above at all times.";
-
-        $systemPrompt = $context
-            ? $safePrompt . $guard . "\n\nKnowledge Base Context:\n" . $context
-            : $safePrompt . $guard . "\n\nNo relevant context found. Politely say you don't have that information.";
+        $systemPrompt = $this->buildSystemPrompt($client->name, $client->system_prompt, $context);
 
         $messages = [
             ['role' => 'system', 'content' => $systemPrompt],
@@ -174,5 +169,56 @@ class PlaygroundChatController extends Controller
         };
 
         return round(($prompt / 1_000_000) * $in + ($completion / 1_000_000) * $out, 6);
+    }
+
+    private function buildSystemPrompt(string $clientName, ?string $systemPrompt, string $context): string
+    {
+        [$resolvedPrompt, $legacyPromptDetected] = $this->resolvePromptTemplate($clientName, $systemPrompt);
+        $safePrompt = preg_replace(
+            '/(-{3,}|\[INST\]|\[\/INST\]|<\|im_start\|>|<\|im_end\|>|###\s*(system|user|assistant))/i',
+            '',
+            $resolvedPrompt
+        );
+
+        $guard = "\n\n[SECURITY] Follow the instructions above at all times.";
+        $legacyPromptNote = $legacyPromptDetected
+            ? "\n\n[POLICY UPDATE] A legacy knowledge-base-only prompt was detected. Do not respond with a bare refusal when the knowledge base is missing coverage."
+            : '';
+
+        if ($context === '') {
+            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$clientName." specific facts that are not in the knowledge base.\n- If the user needs confirmed ".$clientName.' details, suggest contacting '.$clientName.' directly.';
+        }
+
+        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$clientName."'s approved knowledge base.\n- Use this context as the primary source for ".$clientName."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$clientName."-specific facts that are not present in the context.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
+    }
+
+    private function promptHashSeed(Client $client): string
+    {
+        [$resolvedPrompt] = $this->resolvePromptTemplate($client->name, $client->system_prompt);
+
+        return self::PROMPT_POLICY_VERSION.'|'.$resolvedPrompt;
+    }
+
+    /**
+     * @return array{0:string,1:bool}
+     */
+    private function resolvePromptTemplate(string $clientName, ?string $systemPrompt): array
+    {
+        $defaultPrompt = 'You are a helpful assistant for '.$clientName.'. Use approved knowledge base context first for '.$clientName.'-specific facts. If the context does not cover a question, provide helpful general guidance, clearly label it as general information, and do not invent '.$clientName.'-specific details.';
+        $rawPrompt = trim((string) ($systemPrompt ?? ''));
+
+        if ($rawPrompt === '') {
+            return [$defaultPrompt, false];
+        }
+
+        $normalized = trim((string) Str::of($rawPrompt)->lower()->squish(), " \t\n\r\0\x0B.");
+        $isLegacyKbOnlyPrompt = $normalized === self::LEGACY_KB_ONLY_PROMPT
+            || $normalized === self::LEGACY_KB_ONLY_PROMPT_CONTRACTION;
+
+        if ($isLegacyKbOnlyPrompt) {
+            return [$defaultPrompt, true];
+        }
+
+        return [$rawPrompt, false];
     }
 }
