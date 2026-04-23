@@ -158,6 +158,7 @@ interface WidgetConfig {
         primary_color?: string;
         accent_color?: string;
         welcome_message?: string;
+        lead_capture_intro_message?: string;
         toggle_text?: string;
         position?: string;
         theme_mode?: 'system' | 'light' | 'dark';
@@ -197,6 +198,8 @@ const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
 const leadCapturedThisSession = ref(sessionStorage.getItem('davey_lead_captured') === 'true');
 const isDarkMode = ref(false);
 let darkModeMedia: MediaQueryList | null = null;
+const defaultLeadCaptureIntroMessage =
+    'I can help with that! May I get your **name** first so our team can follow up with you?';
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
@@ -209,6 +212,9 @@ const themeMode = computed<'system' | 'light' | 'dark'>(() => {
 
     return mode === 'dark' || mode === 'light' ? mode : 'system';
 });
+const leadCaptureIntroMessage = computed(
+    () => props.config.widget_settings?.lead_capture_intro_message || defaultLeadCaptureIntroMessage,
+);
 const leadMessageStyle = computed(() =>
     isDarkMode.value
         ? {
@@ -527,7 +533,7 @@ async function send() {
 
                 setTimeout(() => {
                     addBotMessage(
-                        `I can help with that! 😊 May I get your **name** first so our team can follow up with you?`,
+                        leadCaptureIntroMessage.value,
                         true,
                     );
                 }, 600);

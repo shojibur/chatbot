@@ -11,6 +11,8 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    private const DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE = 'I can help with that! May I get your **name** first so our team can follow up with you?';
+
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
@@ -93,6 +95,7 @@ class DashboardController extends Controller
                 'primary_color' => $settings->get('primary_color', '#111827'),
                 'accent_color' => $settings->get('accent_color', '#0f766e'),
                 'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
+                'lead_capture_intro_message' => $settings->get('lead_capture_intro_message', self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE),
                 'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
                 'position' => $settings->get('position', 'right'),
                 'theme_mode' => $settings->get('theme_mode', 'system'),

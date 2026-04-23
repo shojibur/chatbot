@@ -593,6 +593,19 @@ function submit(): void {
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
+                            <Label for="lead_capture_intro_message">Lead capture intro message</Label>
+                            <textarea
+                                id="lead_capture_intro_message"
+                                v-model="form.lead_capture_intro_message"
+                                :class="textAreaClass"
+                                placeholder="I can help with that! May I get your **name** first so our team can follow up with you?"
+                            />
+                            <InputError
+                                :message="form.errors.lead_capture_intro_message"
+                            />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
                             <Label for="toggle_text">Pill toggle text (Modern style)</Label>
                             <Input
                                 id="toggle_text"

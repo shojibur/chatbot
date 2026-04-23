@@ -19,6 +19,8 @@ use Inertia\Response;
 
 class ClientController extends Controller
 {
+    private const DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE = 'I can help with that! May I get your **name** first so our team can follow up with you?';
+
     /**
      * Show the admin client index.
      */
@@ -352,11 +354,18 @@ class ClientController extends Controller
         $existingWidgetSettings = Collection::make(
             optional($request->route('client'))->widget_settings
         )->toArray();
+        $leadCaptureIntroMessage = trim((string) ($validated['lead_capture_intro_message']
+            ?? ($existingWidgetSettings['lead_capture_intro_message'] ?? self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE)));
+
+        if ($leadCaptureIntroMessage === '') {
+            $leadCaptureIntroMessage = self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE;
+        }
 
         $widgetSettings = array_merge($existingWidgetSettings, [
             'primary_color' => $validated['primary_color'],
             'accent_color' => $validated['accent_color'],
             'welcome_message' => $validated['welcome_message'],
+            'lead_capture_intro_message' => $leadCaptureIntroMessage,
             'toggle_text' => $validated['toggle_text'] ?? 'Ask anything about this business',
             'position' => $validated['position'],
             'theme_mode' => $validated['theme_mode'],
@@ -448,6 +457,7 @@ class ClientController extends Controller
             'primary_color' => '#111827',
             'accent_color' => '#0f766e',
             'welcome_message' => 'Ask us anything about pricing, support, or appointments.',
+            'lead_capture_intro_message' => self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE,
             'toggle_text' => 'Ask anything about this business',
             'position' => Client::WIDGET_POSITIONS[0],
             'theme_mode' => Client::WIDGET_THEME_MODES[0],
@@ -521,6 +531,7 @@ class ClientController extends Controller
             'primary_color' => $settings->get('primary_color', '#111827'),
             'accent_color' => $settings->get('accent_color', '#0f766e'),
             'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
+            'lead_capture_intro_message' => $settings->get('lead_capture_intro_message', self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE),
             'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
             'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
             'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
@@ -573,6 +584,7 @@ class ClientController extends Controller
                 'primary_color' => $settings->get('primary_color', '#111827'),
                 'accent_color' => $settings->get('accent_color', '#0f766e'),
                 'welcome_message' => $settings->get('welcome_message', 'Ask us anything.'),
+                'lead_capture_intro_message' => $settings->get('lead_capture_intro_message', self::DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE),
                 'toggle_text' => $settings->get('toggle_text', 'Ask anything about this business'),
                 'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
                 'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),

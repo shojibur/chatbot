@@ -55,6 +55,11 @@ const primaryColor = computed(
 const accentColor = computed(
     () => props.client.widget_settings?.accent_color || '#8b5cf6',
 );
+const leadCaptureIntroMessage = computed(
+    () =>
+        props.client.widget_settings?.lead_capture_intro_message ||
+        'I can help with that! May I get your **name** first so our team can follow up with you?',
+);
 
 // Add welcome message on mount
 const welcomeMessage = props.client.widget_settings?.welcome_message;
@@ -222,7 +227,7 @@ async function send() {
                 setTimeout(() => {
                     messages.value.push({
                         role: 'assistant',
-                        content: `I can help with that! 😊 May I get your **name** first so our team can follow up with you?`,
+                        content: leadCaptureIntroMessage.value,
                         timestamp: new Date(),
                     });
                     scrollToBottom();

@@ -35,6 +35,7 @@ export type WidgetSettings = {
     primary_color: string;
     accent_color: string;
     welcome_message: string;
+    lead_capture_intro_message?: string;
     toggle_text?: string;
     position: string;
     theme_mode: 'system' | 'light' | 'dark';
@@ -81,6 +82,7 @@ export type ClientFormRecord = {
     primary_color: string;
     accent_color: string;
     welcome_message: string;
+    lead_capture_intro_message: string;
     toggle_text: string;
     position: string;
     theme_mode: 'system' | 'light' | 'dark';

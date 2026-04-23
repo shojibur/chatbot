@@ -20,6 +20,7 @@ const props = defineProps<{
         primary_color: string;
         accent_color: string;
         welcome_message: string;
+        lead_capture_intro_message: string;
         toggle_text: string;
         position: string;
         theme_mode: 'system' | 'light' | 'dark';
@@ -298,6 +299,22 @@ onUnmounted(() => {
                                     maxlength="150"
                                 />
                                 <InputError :message="errors.toggle_text" />
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="lead_capture_intro_message">Lead Capture Intro Message</Label>
+                                <textarea
+                                    id="lead_capture_intro_message"
+                                    v-model="form.lead_capture_intro_message"
+                                    rows="3"
+                                    maxlength="500"
+                                    class="w-full resize-none rounded-xl border border-input bg-transparent px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                                    placeholder="I can help with that! May I get your **name** first so our team can follow up with you?"
+                                />
+                                <div class="flex justify-between">
+                                    <InputError :message="errors.lead_capture_intro_message" />
+                                    <span class="text-[10px] text-muted-foreground">{{ form.lead_capture_intro_message.length }}/500</span>
+                                </div>
                             </div>
 
                             <div class="flex items-center justify-between rounded-xl border border-sidebar-border/50 bg-muted/20 px-4 py-3">

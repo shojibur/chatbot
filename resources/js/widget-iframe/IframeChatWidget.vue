@@ -102,6 +102,7 @@ interface WidgetConfig {
         primary_color?: string;
         accent_color?: string;
         welcome_message?: string;
+        lead_capture_intro_message?: string;
         toggle_text?: string;
         position?: string;
         iframe?: {
@@ -147,6 +148,8 @@ const sessionToken = ref<string | null>(readStorage(sessionStorageKey));
 const leadCapturedThisSession = ref(
     readStorage(leadCapturedStorageKey) === 'true',
 );
+const defaultLeadCaptureIntroMessage =
+    'I can help with that! May I get your **name** first so our team can follow up with you?';
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#1f2937',
@@ -166,6 +169,9 @@ const themeMode = computed<'system' | 'light' | 'dark'>(() => {
 
     return mode === 'dark' || mode === 'light' ? mode : 'system';
 });
+const leadCaptureIntroMessage = computed(
+    () => props.config.widget_settings?.lead_capture_intro_message || defaultLeadCaptureIntroMessage,
+);
 const leadMessageStyle = computed(() =>
     isDarkMode.value
         ? {
@@ -464,7 +470,7 @@ async function send() {
 
                 setTimeout(() => {
                     addBotMessage(
-                        'I can help with that. May I have your name so our team can follow up?',
+                        leadCaptureIntroMessage.value,
                         true,
                     );
                 }, 600);
