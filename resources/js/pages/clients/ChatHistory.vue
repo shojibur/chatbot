@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
 import {
     ArrowLeft,
     Clock,
@@ -11,6 +12,7 @@ import {
     Zap,
     MessageSquare,
 } from 'lucide-vue-next';
+import { marked } from 'marked';
 import { ref, computed, watch, nextTick } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -103,6 +105,26 @@ const currentMessages = computed(() => {
 
     return loadedMessages.value[selectedSessionId.value] || [];
 });
+
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
+
+function parseMarkdown(text?: string | null): string {
+    if (!text) {
+        return '';
+    }
+
+    return DOMPurify.sanitize(marked.parse(text) as string, {
+        ALLOWED_TAGS: [
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        ],
+    });
+}
 
 function formatDateTime(value?: string | null): string {
     if (!value) {
@@ -468,7 +490,13 @@ function truncateUserAgent(ua?: string | null): string {
                                                     : 'rounded-bl-sm border border-sidebar-border/50 bg-muted text-foreground'
                                             "
                                         >
+                                            <div
+                                                v-if="message.role === 'assistant'"
+                                                class="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-sidebar-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_code]:py-0.5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/5 [&_pre]:p-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 leading-relaxed"
+                                                v-html="parseMarkdown(message.content)"
+                                            ></div>
                                             <p
+                                                v-else
                                                 class="leading-relaxed whitespace-pre-wrap"
                                             >
                                                 {{ message.content }}

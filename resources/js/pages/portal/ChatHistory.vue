@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
 import {
     Bot,
     Clock,
@@ -12,6 +13,7 @@ import {
     User as UserIcon,
     Zap,
 } from 'lucide-vue-next';
+import { marked } from 'marked';
 import { computed, nextTick, ref, watch } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,6 +96,24 @@ watch(
 const currentMessages = computed(() =>
     selectedId.value ? (loadedMessages.value[selectedId.value] ?? []) : [],
 );
+
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
+
+function parseMarkdown(text?: string | null): string {
+    if (!text) return '';
+
+    return DOMPurify.sanitize(marked.parse(text) as string, {
+        ALLOWED_TAGS: [
+            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
+            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        ],
+    });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function relative(v?: string | null) {
@@ -301,7 +321,12 @@ function fmtTime(v?: string | null) {
                                                 ? 'rounded-br-sm bg-blue-600 text-white'
                                                 : 'rounded-bl-sm border border-sidebar-border/40 bg-muted/50 text-foreground'"
                                         >
-                                            <p class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</p>
+                                            <div
+                                                v-if="msg.role === 'assistant'"
+                                                class="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-sidebar-border [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_code]:py-0.5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/5 [&_pre]:p-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 leading-relaxed"
+                                                v-html="parseMarkdown(msg.content)"
+                                            ></div>
+                                            <p v-else class="whitespace-pre-wrap leading-relaxed">{{ msg.content }}</p>
                                         </div>
                                         <div class="flex items-center gap-2 px-1">
                                             <span class="text-[10px] text-muted-foreground tabular-nums">
