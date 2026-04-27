@@ -324,6 +324,60 @@ function cancelLeadCapture() {
     );
 }
 
+function extractLeadIdentity(text: string): { name: string; contact: string } | null {
+    const normalized = text.trim().replace(/\s+/g, ' ');
+    const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+
+    if (emailMatch) {
+        const contact = emailMatch[0].trim();
+        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
+
+        if (name) {
+            return { name, contact };
+        }
+    }
+
+    const phoneMatch = normalized.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+
+    if (phoneMatch) {
+        const contact = phoneMatch[0].trim();
+        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
+
+        if (name) {
+            return { name, contact };
+        }
+    }
+
+    return null;
+}
+
+async function finalizeLeadCapture() {
+    leadStep.value = 'done';
+    loading.value = true;
+    scrollToBottom();
+
+    try {
+        await saveLead();
+        leadCapturedThisSession.value = true;
+        writeStorage(leadCapturedStorageKey, 'true');
+        addBotMessage(
+            'Thank you. Our team will contact you soon.',
+            true,
+        );
+    } catch {
+        addBotMessage(
+            'There was a problem saving your details. Please try again shortly.',
+            true,
+        );
+    } finally {
+        loading.value = false;
+        setTimeout(() => {
+            leadStep.value = null;
+            leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+        }, 4000);
+    }
+}
+
 async function handleLeadStep(text: string): Promise<boolean> {
     if (!leadStep.value || leadStep.value === 'done') return false;
 
@@ -337,6 +391,19 @@ async function handleLeadStep(text: string): Promise<boolean> {
     }
 
     if (leadStep.value === 'ask_name') {
+        const identity = extractLeadIdentity(text);
+
+        if (identity) {
+            leadData.value.name = identity.name;
+            leadData.value.contact = identity.contact;
+            addBotMessage(
+                `Thanks ${leadData.value.name}. We've got your contact details.`,
+                true,
+            );
+            await finalizeLeadCapture();
+            return true;
+        }
+
         leadData.value.name = text;
         leadStep.value = 'ask_contact';
         addBotMessage(
@@ -358,31 +425,7 @@ async function handleLeadStep(text: string): Promise<boolean> {
 
     if (leadStep.value === 'ask_notes') {
         leadData.value.notes = text;
-        leadStep.value = 'done';
-        loading.value = true;
-        scrollToBottom();
-
-        try {
-            await saveLead();
-            leadCapturedThisSession.value = true;
-            writeStorage(leadCapturedStorageKey, 'true');
-            addBotMessage(
-                'Thank you. Our team will contact you soon.',
-                true,
-            );
-        } catch {
-            addBotMessage(
-                'There was a problem saving your details. Please try again shortly.',
-                true,
-            );
-        } finally {
-            loading.value = false;
-            setTimeout(() => {
-                leadStep.value = null;
-                leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
-            }, 4000);
-        }
-
+        await finalizeLeadCapture();
         return true;
     }
 

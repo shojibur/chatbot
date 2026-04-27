@@ -124,6 +124,82 @@ function cancelLeadCapture(): void {
     scrollToBottom();
 }
 
+function extractLeadIdentity(text: string): { name: string; contact: string } | null {
+    const normalized = text.trim().replace(/\s+/g, ' ');
+    const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+
+    if (emailMatch) {
+        const contact = emailMatch[0].trim();
+        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
+
+        if (name) {
+            return { name, contact };
+        }
+    }
+
+    const phoneMatch = normalized.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
+
+    if (phoneMatch) {
+        const contact = phoneMatch[0].trim();
+        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
+
+        if (name) {
+            return { name, contact };
+        }
+    }
+
+    return null;
+}
+
+async function finalizeLeadCapture(): Promise<void> {
+    leadStep.value = 'done';
+    loading.value = true;
+    scrollToBottom();
+
+    try {
+        await fetch(`${props.api_base_url}/api/v1/leads`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                client_code: props.client.unique_code,
+                session_token: sessionId.value,
+                name: leadData.value.name,
+                contact: leadData.value.contact,
+                user_request: leadData.value.triggerMessage,
+                notes: leadData.value.notes,
+                trigger: 'intent',
+            }),
+        });
+
+        leadCapturedThisSession.value = true;
+        messages.value.push({
+            role: 'assistant',
+            content: `✅ **Thank you!** Our team will contact you soon.`,
+            timestamp: new Date(),
+        });
+    } catch {
+        messages.value.push({
+            role: 'assistant',
+            content: `Sorry, there was a problem saving your details.`,
+            timestamp: new Date(),
+        });
+    } finally {
+        loading.value = false;
+        setTimeout(() => {
+            leadStep.value = null;
+            leadData.value = {
+                name: '',
+                contact: '',
+                notes: '',
+                triggerMessage: '',
+            };
+        }, 4000);
+    }
+}
+
 async function handleLeadStep(text: string): Promise<boolean> {
     if (!leadStep.value || leadStep.value === 'done') {
         return false;
@@ -139,6 +215,20 @@ async function handleLeadStep(text: string): Promise<boolean> {
     }
 
     if (leadStep.value === 'ask_name') {
+        const identity = extractLeadIdentity(text);
+
+        if (identity) {
+            leadData.value.name = identity.name;
+            leadData.value.contact = identity.contact;
+            messages.value.push({
+                role: 'assistant',
+                content: `Thanks ${leadData.value.name}! We've got your contact details.`,
+                timestamp: new Date(),
+            });
+            await finalizeLeadCapture();
+            return true;
+        }
+
         leadData.value.name = text;
         leadStep.value = 'ask_contact';
         messages.value.push({
@@ -162,53 +252,7 @@ async function handleLeadStep(text: string): Promise<boolean> {
 
     if (leadStep.value === 'ask_notes') {
         leadData.value.notes = text;
-        leadStep.value = 'done';
-        loading.value = true;
-        scrollToBottom();
-
-        try {
-            await fetch(`${props.api_base_url}/api/v1/leads`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                },
-                body: JSON.stringify({
-                    client_code: props.client.unique_code,
-                    session_token: sessionId.value, // Usually the widget gets a session_token string back from ChatController, but here we just pass the Playground UUID for testing
-                    name: leadData.value.name,
-                    contact: leadData.value.contact,
-                    user_request: leadData.value.triggerMessage,
-                    notes: leadData.value.notes,
-                    trigger: 'intent',
-                }),
-            });
-
-            leadCapturedThisSession.value = true;
-            messages.value.push({
-                role: 'assistant',
-                content: `✅ **Thank you!** Our team will contact you soon.`,
-                timestamp: new Date(),
-            });
-        } catch {
-            messages.value.push({
-                role: 'assistant',
-                content: `Sorry, there was a problem saving your details.`,
-                timestamp: new Date(),
-            });
-        } finally {
-            loading.value = false;
-            setTimeout(() => {
-                leadStep.value = null;
-                leadData.value = {
-                    name: '',
-                    contact: '',
-                    notes: '',
-                    triggerMessage: '',
-                };
-            }, 4000);
-        }
-
+        await finalizeLeadCapture();
         return true;
     }
 
