@@ -141,8 +141,8 @@ class PlaygroundChatController extends Controller
         $response = $this->aiClientFactory->make()->chat()->create([
             'model' => $chatModel,
             'messages' => $messages,
-            'max_tokens' => 1024,
             'temperature' => 0.7,
+            ...$this->modelCatalog->chatTokenLimitOptions($chatModel),
         ]);
 
         $answer = $response->choices[0]->message->content ?? '';

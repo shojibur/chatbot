@@ -80,8 +80,11 @@ PROMPT;
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],
-                'max_tokens' => 3,
                 'temperature' => 0,
+                ...$this->modelCatalog->chatTokenLimitOptions(
+                    $this->modelCatalog->intentClassifierModel(),
+                    $this->modelCatalog->intentClassifierOutputTokens(),
+                ),
             ]);
 
             $result = mb_strtolower(trim($response->choices[0]->message->content ?? ''));

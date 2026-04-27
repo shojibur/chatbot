@@ -60,6 +60,26 @@ class AiModelCatalog
         return $this->normalizeModel($model ?: $this->defaultChatModel());
     }
 
+    /**
+     * @return array{max_tokens?: int, max_completion_tokens?: int}
+     */
+    public function chatTokenLimitOptions(string $model, ?int $maxOutputTokens = null): array
+    {
+        $limit = max(1, (int) ($maxOutputTokens ?? config('ai.limits.chat_output_tokens', 2000)));
+        $model = $this->normalizeModel($model);
+
+        if ($this->usesMaxCompletionTokens($model)) {
+            return ['max_completion_tokens' => $limit];
+        }
+
+        return ['max_tokens' => $limit];
+    }
+
+    public function intentClassifierOutputTokens(): int
+    {
+        return max(1, (int) config('ai.limits.intent_output_tokens', 3));
+    }
+
     public function embeddingModel(?string $model): string
     {
         return $this->normalizeModel($model ?: $this->defaultEmbeddingModel());
@@ -152,6 +172,11 @@ class AiModelCatalog
             'text-embedding-3-small' => 'openai/text-embedding-3-small',
             default => $model,
         };
+    }
+
+    private function usesMaxCompletionTokens(string $model): bool
+    {
+        return preg_match('/^(openai\/)?gpt-5([.-]|$)/', $model) === 1;
     }
 
     /**
