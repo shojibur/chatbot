@@ -7,6 +7,8 @@ use App\Http\Requests\Api\ChatRequest;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Models\UsageLog;
+use App\Services\AiClientFactory;
+use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\IntentDetectionService;
@@ -15,7 +17,6 @@ use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use OpenAI\Laravel\Facades\OpenAI;
 
 class ChatController extends Controller
 {
@@ -31,6 +32,8 @@ class ChatController extends Controller
         private readonly ChatHistoryService $chatHistoryService,
         private readonly IntentDetectionService $intentService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
+        private readonly AiClientFactory $aiClientFactory,
+        private readonly AiModelCatalog $modelCatalog,
     ) {}
 
     public function chat(ChatRequest $request): JsonResponse
@@ -57,7 +60,7 @@ class ChatController extends Controller
         }
 
         $message = $request->input('message');
-        $chatModel = $client->chat_model ?? 'gpt-4o-mini';
+        $chatModel = $this->modelCatalog->chatModel($client->chat_model);
         $promptHash = hash('sha256', $this->promptHashSeed($client));
 
         // Resolve or create a chat session, then fetch prior history BEFORE logging
@@ -147,7 +150,7 @@ class ChatController extends Controller
             ['role' => 'user', 'content' => $message],
         ];
 
-        $response = OpenAI::chat()->create([
+        $response = $this->aiClientFactory->make()->chat()->create([
             'model' => $chatModel,
             'messages' => $messages,
             'max_tokens' => 1024,
@@ -156,9 +159,11 @@ class ChatController extends Controller
 
         $answer = $response->choices[0]->message->content ?? '';
         $usage = $response->usage;
+        $usageArray = $response->toArray()['usage'] ?? [];
         $promptTokens = $usage->promptTokens ?? 0;
         $completionTokens = $usage->completionTokens ?? 0;
         $totalTokens = $promptTokens + $completionTokens;
+        $cachedTokens = $usage->promptTokensDetails?->cachedTokens ?? 0;
 
         // Log usage
         UsageLog::create([
@@ -167,13 +172,16 @@ class ChatController extends Controller
             'model' => $chatModel,
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
-            'cached_input_tokens' => $usage->promptTokensCached ?? 0,
+            'cached_input_tokens' => $cachedTokens,
             'total_tokens' => $totalTokens,
-            'estimated_cost' => $this->estimateChatCost($chatModel, $promptTokens, $completionTokens),
+            'estimated_cost' => $this->estimateChatCost($chatModel, $promptTokens, $completionTokens, $cachedTokens),
             'request_excerpt' => mb_substr($message, 0, 200),
             'meta' => [
                 'chunks_used' => $chunks->count(),
                 'context_length' => mb_strlen($context),
+                'provider' => $this->modelCatalog->provider(),
+                'cost_source' => 'estimate',
+                'usage_details' => $usageArray,
             ],
         ]);
 
@@ -185,7 +193,7 @@ class ChatController extends Controller
                 $answer,
                 mb_substr($context, 0, 500),
                 $chatModel,
-                $client->embedding_model ?? 'text-embedding-3-small',
+                $this->modelCatalog->embeddingModel($client->embedding_model),
                 $promptHash,
                 $client->cache_ttl_hours,
             );
@@ -303,18 +311,9 @@ class ChatController extends Controller
             ->sum('total_tokens');
     }
 
-    private function estimateChatCost(string $model, int $promptTokens, int $completionTokens): float
+    private function estimateChatCost(string $model, int $promptTokens, int $completionTokens, int $cachedTokens = 0): float
     {
-        [$inputCost, $outputCost] = match ($model) {
-            'gpt-4o-mini' => [0.15, 0.60],
-            'gpt-4o' => [2.50, 10.00],
-            default => [0.15, 0.60],
-        };
-
-        return round(
-            ($promptTokens / 1_000_000) * $inputCost + ($completionTokens / 1_000_000) * $outputCost,
-            6
-        );
+        return $this->modelCatalog->estimateChatCostWithCache($model, $promptTokens, $completionTokens, $cachedTokens);
     }
 
     /**
@@ -351,7 +350,7 @@ class ChatController extends Controller
                 (string) ($request->input('page_url') ?? $request->query('page_url') ?? '')
             );
 
-            if ($parentHost && $parentHost !== $appHost && !in_array($parentHost, ['localhost', '127.0.0.1'], true)) {
+            if ($parentHost && $parentHost !== $appHost && ! in_array($parentHost, ['localhost', '127.0.0.1'], true)) {
                 $requestHost = $parentHost;
             } else {
                 return true;
@@ -361,7 +360,7 @@ class ChatController extends Controller
         $allowed = array_map(fn ($d) => strtolower(trim($d)), $client->allowed_domains);
 
         foreach ($allowed as $domain) {
-            if ($requestHost === $domain || str_ends_with($requestHost, '.' . $domain)) {
+            if ($requestHost === $domain || str_ends_with($requestHost, '.'.$domain)) {
                 return true;
             }
         }

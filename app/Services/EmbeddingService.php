@@ -4,10 +4,14 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\UsageLog;
-use OpenAI\Laravel\Facades\OpenAI;
 
 class EmbeddingService
 {
+    public function __construct(
+        private readonly AiClientFactory $aiClientFactory,
+        private readonly AiModelCatalog $modelCatalog,
+    ) {}
+
     /**
      * Generate an embedding vector for a single text.
      *
@@ -15,15 +19,18 @@ class EmbeddingService
      */
     public function generate(string $text, string $model = 'text-embedding-3-small', ?Client $client = null): array
     {
-        $response = OpenAI::embeddings()->create([
+        $model = $this->modelCatalog->embeddingModel($model);
+
+        $response = $this->aiClientFactory->make()->embeddings()->create([
             'model' => $model,
             'input' => $text,
         ]);
 
         $usage = $response->usage;
+        $usageArray = $response->toArray()['usage'] ?? [];
 
         if ($client) {
-            $this->logUsage($client, $model, $usage->promptTokens ?? 0, $text);
+            $this->logUsage($client, $model, $usage->promptTokens ?? 0, $text, $usageArray);
         }
 
         return $response->embeddings[0]->embedding;
@@ -41,15 +48,18 @@ class EmbeddingService
             return [];
         }
 
-        $response = OpenAI::embeddings()->create([
+        $model = $this->modelCatalog->embeddingModel($model);
+
+        $response = $this->aiClientFactory->make()->embeddings()->create([
             'model' => $model,
             'input' => $texts,
         ]);
 
         $usage = $response->usage;
+        $usageArray = $response->toArray()['usage'] ?? [];
 
         if ($client) {
-            $this->logUsage($client, $model, $usage->promptTokens ?? 0, 'batch:'.count($texts).' chunks');
+            $this->logUsage($client, $model, $usage->promptTokens ?? 0, 'batch:'.count($texts).' chunks', $usageArray);
         }
 
         $embeddings = [];
@@ -62,7 +72,7 @@ class EmbeddingService
         return array_values($embeddings);
     }
 
-    private function logUsage(Client $client, string $model, int $promptTokens, string $excerpt): void
+    private function logUsage(Client $client, string $model, int $promptTokens, string $excerpt, array $usage = []): void
     {
         UsageLog::create([
             'client_id' => $client->id,
@@ -74,18 +84,17 @@ class EmbeddingService
             'total_tokens' => $promptTokens,
             'estimated_cost' => $this->estimateCost($model, $promptTokens),
             'request_excerpt' => mb_substr($excerpt, 0, 200),
-            'meta' => ['service' => 'embedding'],
+            'meta' => [
+                'service' => 'embedding',
+                'provider' => $this->modelCatalog->provider(),
+                'cost_source' => 'estimate',
+                'usage_details' => $usage,
+            ],
         ]);
     }
 
     private function estimateCost(string $model, int $tokens): float
     {
-        $costPerMillionTokens = match ($model) {
-            'text-embedding-3-small' => 0.02,
-            'text-embedding-3-large' => 0.13,
-            default => 0.02,
-        };
-
-        return round(($tokens / 1_000_000) * $costPerMillionTokens, 6);
+        return $this->modelCatalog->estimateEmbeddingCost($model, $tokens);
     }
 }

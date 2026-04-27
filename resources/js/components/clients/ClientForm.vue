@@ -34,6 +34,7 @@ type Props = {
 const props = defineProps<Props>();
 
 const form = useForm<ClientFormRecord>({ ...props.client });
+const CUSTOM_MODEL_OPTION = '__custom__';
 
 const selectClass =
     'h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
@@ -62,6 +63,18 @@ const themeModeLabels: Record<string, string> = {
 const selectedPlan = computed(
     () => props.plans.find((plan) => plan.id === Number(form.plan_id)) ?? null,
 );
+
+const selectedChatModelSuggestion = computed({
+    get: () =>
+        props.chatModels.includes(form.chat_model)
+            ? form.chat_model
+            : CUSTOM_MODEL_OPTION,
+    set: (value: string) => {
+        if (value !== CUSTOM_MODEL_OPTION) {
+            form.chat_model = value;
+        }
+    },
+});
 
 function submit(): void {
     if (props.client.id) {
@@ -342,42 +355,79 @@ function submit(): void {
                         </div>
                     </CardHeader>
                     <CardContent class="grid gap-4 pt-6 md:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="chat_model">Chat model</Label>
-                            <select
-                                id="chat_model"
-                                v-model="form.chat_model"
-                                :class="selectClass"
-                            >
-                                <option
-                                    v-for="model in chatModels"
-                                    :key="model"
-                                    :value="model"
+                        <div
+                            class="grid gap-4 rounded-2xl border border-sidebar-border/70 p-4 md:col-span-2 md:grid-cols-2"
+                        >
+                            <div class="grid content-start gap-2">
+                                <Label for="chat_model_suggestion"
+                                    >Chat model suggestions</Label
                                 >
-                                    {{ model }}
-                                </option>
-                            </select>
-                            <InputError :message="form.errors.chat_model" />
-                        </div>
+                                <select
+                                    id="chat_model_suggestion"
+                                    v-model="selectedChatModelSuggestion"
+                                    :class="selectClass"
+                                >
+                                    <option
+                                        v-for="model in chatModels"
+                                        :key="model"
+                                        :value="model"
+                                    >
+                                        {{ model }}
+                                    </option>
+                                    <option :value="CUSTOM_MODEL_OPTION">
+                                        Custom model
+                                    </option>
+                                </select>
+                                <Label for="chat_model">Chat model</Label>
+                                <Input
+                                    id="chat_model"
+                                    v-model="form.chat_model"
+                                    placeholder="openai/gpt-4o-mini"
+                                />
+                                <p
+                                    class="text-xs leading-5 text-muted-foreground"
+                                >
+                                    Pick from the dropdown or type any other
+                                    model ID manually.
+                                    <a
+                                        href="https://openrouter.ai/models"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        class="underline underline-offset-2"
+                                    >
+                                        View all models
+                                    </a>
+                                </p>
+                                <InputError :message="form.errors.chat_model" />
+                            </div>
 
-                        <div class="grid gap-2">
-                            <Label for="embedding_model">Embedding model</Label>
-                            <select
-                                id="embedding_model"
-                                v-model="form.embedding_model"
-                                :class="selectClass"
-                            >
-                                <option
-                                    v-for="model in embeddingModels"
-                                    :key="model"
-                                    :value="model"
+                            <div class="grid content-start gap-2">
+                                <Label for="embedding_model"
+                                    >Embedding model</Label
                                 >
-                                    {{ model }}
-                                </option>
-                            </select>
-                            <InputError
-                                :message="form.errors.embedding_model"
-                            />
+                                <select
+                                    id="embedding_model"
+                                    v-model="form.embedding_model"
+                                    :class="selectClass"
+                                >
+                                    <option
+                                        v-for="model in embeddingModels"
+                                        :key="model"
+                                        :value="model"
+                                    >
+                                        {{ model }}
+                                    </option>
+                                </select>
+                                <p
+                                    class="text-xs leading-5 text-muted-foreground"
+                                >
+                                    Use the approved embedding options for this
+                                    workspace.
+                                </p>
+                                <InputError
+                                    :message="form.errors.embedding_model"
+                                />
+                            </div>
                         </div>
 
                         <div class="grid gap-2">
@@ -593,7 +643,9 @@ function submit(): void {
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
-                            <Label for="lead_capture_intro_message">Lead capture intro message</Label>
+                            <Label for="lead_capture_intro_message"
+                                >Lead capture intro message</Label
+                            >
                             <textarea
                                 id="lead_capture_intro_message"
                                 v-model="form.lead_capture_intro_message"
@@ -601,12 +653,16 @@ function submit(): void {
                                 placeholder="I can help with that! May I get your **name** first so our team can follow up with you?"
                             />
                             <InputError
-                                :message="form.errors.lead_capture_intro_message"
+                                :message="
+                                    form.errors.lead_capture_intro_message
+                                "
                             />
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
-                            <Label for="toggle_text">Pill toggle text (Modern style)</Label>
+                            <Label for="toggle_text"
+                                >Pill toggle text (Modern style)</Label
+                            >
                             <Input
                                 id="toggle_text"
                                 v-model="form.toggle_text"
@@ -715,7 +771,10 @@ function submit(): void {
                                             background: form.accent_color,
                                         }"
                                     ></div>
-                                    <span class="text-sm text-slate-700">{{ form.toggle_text || 'Ask anything about this business' }}</span>
+                                    <span class="text-sm text-slate-700">{{
+                                        form.toggle_text ||
+                                        'Ask anything about this business'
+                                    }}</span>
                                 </div>
                             </div>
 

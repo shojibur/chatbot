@@ -37,7 +37,7 @@ class UsageLogFactory extends Factory
             'completion_tokens' => $completionTokens,
             'cached_input_tokens' => $cachedTokens,
             'total_tokens' => $promptTokens + $completionTokens,
-            'estimated_cost' => fake()->randomFloat(4, 0.0001, 0.05),
+            'estimated_cost' => fake()->randomFloat(8, 0.0001, 0.05),
             'request_excerpt' => fake()->sentence(),
             'meta' => [
                 'cache_hit' => fake()->boolean(),

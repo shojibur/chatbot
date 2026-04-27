@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
-use OpenAI\Laravel\Facades\OpenAI;
-
 class IntentDetectionService
 {
+    public function __construct(
+        private readonly AiClientFactory $aiClientFactory,
+        private readonly AiModelCatalog $modelCatalog,
+    ) {}
+
     /**
      * Deterministic contact-intent phrases that should always trigger lead capture.
      *
@@ -72,8 +75,8 @@ BOT REPLY: {$botAnswer}
 PROMPT;
 
         try {
-            $response = OpenAI::chat()->create([
-                'model' => 'gpt-4o-mini',
+            $response = $this->aiClientFactory->make()->chat()->create([
+                'model' => $this->modelCatalog->intentClassifierModel(),
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],

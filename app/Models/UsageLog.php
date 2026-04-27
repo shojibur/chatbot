@@ -49,7 +49,7 @@ class UsageLog extends Model
             'completion_tokens' => 'integer',
             'cached_input_tokens' => 'integer',
             'total_tokens' => 'integer',
-            'estimated_cost' => 'decimal:4',
+            'estimated_cost' => 'decimal:8',
             'meta' => 'array',
         ];
     }

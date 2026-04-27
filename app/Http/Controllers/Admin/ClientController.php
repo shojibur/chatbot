@@ -5,14 +5,18 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreClientRequest;
 use App\Http\Requests\Admin\UpdateClientRequest;
+use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\KnowledgeSource;
 use App\Models\Plan;
+use App\Services\AiModelCatalog;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,6 +24,10 @@ use Inertia\Response;
 class ClientController extends Controller
 {
     private const DEFAULT_LEAD_CAPTURE_INTRO_MESSAGE = 'I can help with that! May I get your **name** first so our team can follow up with you?';
+
+    public function __construct(
+        private readonly AiModelCatalog $modelCatalog,
+    ) {}
 
     /**
      * Show the admin client index.
@@ -148,10 +156,10 @@ class ClientController extends Controller
 
         $sessions = $client->chatSessions()
             ->addSelect([
-                'first_message' => \App\Models\ChatMessage::select('content')
+                'first_message' => ChatMessage::select('content')
                     ->whereColumn('chat_session_id', 'chat_sessions.id')
                     ->oldest('created_at')
-                    ->limit(1)
+                    ->limit(1),
             ])
             ->orderByDesc('last_activity_at')
             ->simplePaginate(20);
@@ -178,7 +186,7 @@ class ClientController extends Controller
     /**
      * Get the messages for a specific chat session (lazy loaded API endpoint).
      */
-    public function chatSessionMessages(Request $request, Client $client, ChatSession $session): \Illuminate\Http\JsonResponse
+    public function chatSessionMessages(Request $request, Client $client, ChatSession $session): JsonResponse
     {
         if ($session->client_id !== $client->id) {
             abort(404);
@@ -287,7 +295,7 @@ class ClientController extends Controller
     {
         $client->update($this->payload($request));
 
-        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
+        Cache::forget("widget_config_{$client->unique_code}");
 
         return to_route('clients.show', $client)->with('status', 'client-updated');
     }
@@ -326,7 +334,7 @@ class ClientController extends Controller
             'widget_settings' => $settings,
         ]);
 
-        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
+        Cache::forget("widget_config_{$client->unique_code}");
 
         return back()->with('status', 'iframe-settings-updated');
     }
@@ -336,8 +344,8 @@ class ClientController extends Controller
      */
     public function destroy(Client $client): RedirectResponse
     {
-        \Illuminate\Support\Facades\Cache::forget("widget_config_{$client->unique_code}");
-        
+        Cache::forget("widget_config_{$client->unique_code}");
+
         $client->delete();
 
         return to_route('clients.index')->with('status', 'client-deleted');
@@ -422,8 +430,8 @@ class ClientController extends Controller
             'client_statuses' => Client::STATUSES,
             'widget_positions' => Client::WIDGET_POSITIONS,
             'widget_theme_modes' => Client::WIDGET_THEME_MODES,
-            'chat_models' => Client::CHAT_MODELS,
-            'embedding_models' => Client::EMBEDDING_MODELS,
+            'chat_models' => $this->modelCatalog->chatSuggestions(),
+            'embedding_models' => $this->modelCatalog->embeddingSuggestions(),
         ];
     }
 
@@ -444,8 +452,8 @@ class ClientController extends Controller
             'website_url' => '',
             'business_description' => '',
             'system_prompt' => 'Use approved knowledge base context first for business-specific facts. If the context does not cover a question, provide helpful general guidance, clearly label it as general information, and do not invent business-specific details.',
-            'chat_model' => Client::CHAT_MODELS[0],
-            'embedding_model' => Client::EMBEDDING_MODELS[0],
+            'chat_model' => $this->modelCatalog->defaultChatModel(),
+            'embedding_model' => $this->modelCatalog->defaultEmbeddingModel(),
             'retrieval_chunk_count' => 3,
             'cache_ttl_hours' => 24,
             'prompt_caching_enabled' => true,

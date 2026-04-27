@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Models\UsageLog;
+use App\Services\AiClientFactory;
+use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\IntentDetectionService;
@@ -14,7 +16,6 @@ use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use OpenAI\Laravel\Facades\OpenAI;
 
 class PlaygroundChatController extends Controller
 {
@@ -30,6 +31,8 @@ class PlaygroundChatController extends Controller
         private readonly ChatHistoryService $chatHistoryService,
         private readonly IntentDetectionService $intentService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
+        private readonly AiClientFactory $aiClientFactory,
+        private readonly AiModelCatalog $modelCatalog,
     ) {}
 
     public function chat(Request $request): JsonResponse
@@ -52,22 +55,22 @@ class PlaygroundChatController extends Controller
         }
 
         $validated = $request->validate([
-            'message'    => ['required', 'string', 'max:2000'],
+            'message' => ['required', 'string', 'max:2000'],
             'session_id' => ['required', 'string', 'max:100'],
         ]);
 
-        $message    = $validated['message'];
-        $chatModel  = $client->chat_model ?? 'gpt-4o-mini';
+        $message = $validated['message'];
+        $chatModel = $this->modelCatalog->chatModel($client->chat_model);
         $promptHash = hash('sha256', $this->promptHashSeed($client));
 
         // Resolve/create a chat session using the playground session_id as identifier
-        $sessionToken = 'playground-' . $validated['session_id'];
-        $chatSession  = $this->chatHistoryService->resolveSession(
+        $sessionToken = 'playground-'.$validated['session_id'];
+        $chatSession = $this->chatHistoryService->resolveSession(
             $client,
             $request->merge(['session_id' => $sessionToken])
         );
 
-        $recentHistory    = $this->chatHistoryService->getRecentHistory($chatSession);
+        $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
         $blockedCategory = $this->messagePolicyService->blockedCategory($message);
@@ -82,12 +85,12 @@ class PlaygroundChatController extends Controller
             );
 
             return response()->json([
-                'answer'            => $blockedAnswer,
-                'cached'            => false,
-                'chunks_used'       => 0,
-                'tokens_used'       => 0,
-                'response_time_ms'  => null,
-                'policy_blocked'    => true,
+                'answer' => $blockedAnswer,
+                'cached' => false,
+                'chunks_used' => 0,
+                'tokens_used' => 0,
+                'response_time_ms' => null,
+                'policy_blocked' => true,
             ]);
         }
 
@@ -103,16 +106,16 @@ class PlaygroundChatController extends Controller
                 $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
 
                 UsageLog::create([
-                    'client_id'        => $client->id,
+                    'client_id' => $client->id,
                     'interaction_type' => 'cache_hit',
-                    'model'            => $chatModel,
-                    'prompt_tokens'    => 0,
-                    'completion_tokens'=> 0,
+                    'model' => $chatModel,
+                    'prompt_tokens' => 0,
+                    'completion_tokens' => 0,
                     'cached_input_tokens' => 0,
-                    'total_tokens'     => 0,
-                    'estimated_cost'   => 0,
-                    'request_excerpt'  => mb_substr($message, 0, 200),
-                    'meta'             => ['source' => 'playground'],
+                    'total_tokens' => 0,
+                    'estimated_cost' => 0,
+                    'request_excerpt' => mb_substr($message, 0, 200),
+                    'meta' => ['source' => 'playground'],
                 ]);
 
                 return response()->json([
@@ -124,8 +127,8 @@ class PlaygroundChatController extends Controller
 
         // Vector search
         $searchQuery = $this->chatHistoryService->buildSearchQuery($message, $recentHistory);
-        $chunks      = $this->retrievalService->search($client, $searchQuery);
-        $context     = $this->retrievalService->buildContext($chunks);
+        $chunks = $this->retrievalService->search($client, $searchQuery);
+        $context = $this->retrievalService->buildContext($chunks);
 
         $systemPrompt = $this->buildSystemPrompt($client->name, $client->system_prompt, $context);
 
@@ -135,30 +138,38 @@ class PlaygroundChatController extends Controller
             ['role' => 'user', 'content' => $message],
         ];
 
-        $response          = OpenAI::chat()->create([
-            'model'      => $chatModel,
-            'messages'   => $messages,
+        $response = $this->aiClientFactory->make()->chat()->create([
+            'model' => $chatModel,
+            'messages' => $messages,
             'max_tokens' => 1024,
-            'temperature'=> 0.7,
+            'temperature' => 0.7,
         ]);
 
-        $answer            = $response->choices[0]->message->content ?? '';
-        $usage             = $response->usage;
-        $promptTokens      = $usage->promptTokens ?? 0;
-        $completionTokens  = $usage->completionTokens ?? 0;
-        $totalTokens       = $promptTokens + $completionTokens;
+        $answer = $response->choices[0]->message->content ?? '';
+        $usage = $response->usage;
+        $usageArray = $response->toArray()['usage'] ?? [];
+        $promptTokens = $usage->promptTokens ?? 0;
+        $completionTokens = $usage->completionTokens ?? 0;
+        $totalTokens = $promptTokens + $completionTokens;
+        $cachedTokens = $usage->promptTokensDetails?->cachedTokens ?? 0;
 
         UsageLog::create([
-            'client_id'          => $client->id,
-            'interaction_type'   => 'chat',
-            'model'              => $chatModel,
-            'prompt_tokens'      => $promptTokens,
-            'completion_tokens'  => $completionTokens,
-            'cached_input_tokens'=> $usage->promptTokensCached ?? 0,
-            'total_tokens'       => $totalTokens,
-            'estimated_cost'     => $this->estimateCost($chatModel, $promptTokens, $completionTokens),
-            'request_excerpt'    => mb_substr($message, 0, 200),
-            'meta'               => ['source' => 'playground', 'chunks_used' => $chunks->count()],
+            'client_id' => $client->id,
+            'interaction_type' => 'chat',
+            'model' => $chatModel,
+            'prompt_tokens' => $promptTokens,
+            'completion_tokens' => $completionTokens,
+            'cached_input_tokens' => $cachedTokens,
+            'total_tokens' => $totalTokens,
+            'estimated_cost' => $this->estimateCost($chatModel, $promptTokens, $completionTokens, $cachedTokens),
+            'request_excerpt' => mb_substr($message, 0, 200),
+            'meta' => [
+                'source' => 'playground',
+                'chunks_used' => $chunks->count(),
+                'provider' => $this->modelCatalog->provider(),
+                'cost_source' => 'estimate',
+                'usage_details' => $usageArray,
+            ],
         ]);
 
         if ($client->semantic_cache_enabled) {
@@ -166,7 +177,7 @@ class PlaygroundChatController extends Controller
                 $client, $message, $answer,
                 mb_substr($context, 0, 500),
                 $chatModel,
-                $client->embedding_model ?? 'text-embedding-3-small',
+                $this->modelCatalog->embeddingModel($client->embedding_model),
                 $promptHash,
                 $client->cache_ttl_hours,
             );
@@ -176,23 +187,17 @@ class PlaygroundChatController extends Controller
         $this->chatHistoryService->logAssistantMessage($chatSession, $cleanAnswer, $totalTokens);
 
         return response()->json([
-            'answer'            => $cleanAnswer,
-            'cached'            => false,
-            'chunks_used'       => $chunks->count(),
-            'tokens_used'       => $totalTokens,
-            'response_time_ms'  => null, // computed client-side
+            'answer' => $cleanAnswer,
+            'cached' => false,
+            'chunks_used' => $chunks->count(),
+            'tokens_used' => $totalTokens,
+            'response_time_ms' => null, // computed client-side
         ]);
     }
 
-    private function estimateCost(string $model, int $prompt, int $completion): float
+    private function estimateCost(string $model, int $prompt, int $completion, int $cachedTokens = 0): float
     {
-        [$in, $out] = match ($model) {
-            'gpt-4o-mini' => [0.15, 0.60],
-            'gpt-4o'      => [2.50, 10.00],
-            default       => [0.15, 0.60],
-        };
-
-        return round(($prompt / 1_000_000) * $in + ($completion / 1_000_000) * $out, 6);
+        return $this->modelCatalog->estimateChatCostWithCache($model, $prompt, $completion, $cachedTokens);
     }
 
     private function buildSystemPrompt(string $clientName, ?string $systemPrompt, string $context): string
