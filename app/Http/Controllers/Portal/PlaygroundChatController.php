@@ -137,6 +137,7 @@ class PlaygroundChatController extends Controller
             ...$recentHistory,
             ['role' => 'user', 'content' => $message],
         ];
+        $outputTokenLimit = (int) config('ai.limits.chat_output_tokens', 2000);
 
         $response = $this->aiClientFactory->make()->chat()->create([
             'model' => $chatModel,
@@ -146,6 +147,7 @@ class PlaygroundChatController extends Controller
         ]);
 
         $answer = $response->choices[0]->message->content ?? '';
+        $finishReason = $response->choices[0]->finishReason ?? null;
         $usage = $response->usage;
         $usageArray = $response->toArray()['usage'] ?? [];
         $promptTokens = $usage->promptTokens ?? 0;
@@ -166,6 +168,14 @@ class PlaygroundChatController extends Controller
             'meta' => [
                 'source' => 'playground',
                 'chunks_used' => $chunks->count(),
+                'context_length' => mb_strlen($context),
+                'search_query_length' => mb_strlen($searchQuery),
+                'history_message_count' => count($recentHistory),
+                'history_length' => collect($recentHistory)->sum(
+                    fn (array $historyMessage) => mb_strlen((string) ($historyMessage['content'] ?? ''))
+                ),
+                'configured_output_limit' => $outputTokenLimit,
+                'finish_reason' => $finishReason,
                 'provider' => $this->modelCatalog->provider(),
                 'cost_source' => 'estimate',
                 'usage_details' => $usageArray,
