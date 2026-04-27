@@ -78,6 +78,52 @@ const leadStep = ref<LeadStep>(null);
 const leadCapturedThisSession = ref(false);
 const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
 
+function userIsRefusing(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    const refusalPatterns = [
+        'no',
+        'nah',
+        'nope',
+        'not',
+        "don't",
+        'dont',
+        'do not',
+        'i refuse',
+        'skip',
+        'pass',
+        'never mind',
+        'nevermind',
+        'forget it',
+        'stop',
+        'cancel',
+        "i'd rather not",
+        'i rather not',
+        'no thanks',
+        'no thank',
+        'not interested',
+        'leave me alone',
+        "i don't want",
+        'i do not want',
+        'i dont want',
+        'prefer not',
+        'rather not',
+        'not now',
+    ];
+
+    return refusalPatterns.some((pattern) => lower.includes(pattern));
+}
+
+function cancelLeadCapture(): void {
+    leadStep.value = null;
+    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    messages.value.push({
+        role: 'assistant',
+        content: `No problem at all. Feel free to keep chatting and ask anything else.`,
+        timestamp: new Date(),
+    });
+    scrollToBottom();
+}
+
 async function handleLeadStep(text: string): Promise<boolean> {
     if (!leadStep.value || leadStep.value === 'done') {
         return false;
@@ -86,6 +132,11 @@ async function handleLeadStep(text: string): Promise<boolean> {
     // Add user response to chat
     messages.value.push({ role: 'user', content: text, timestamp: new Date() });
     scrollToBottom();
+
+    if (userIsRefusing(text)) {
+        cancelLeadCapture();
+        return true;
+    }
 
     if (leadStep.value === 'ask_name') {
         leadData.value.name = text;
@@ -118,7 +169,10 @@ async function handleLeadStep(text: string): Promise<boolean> {
         try {
             await fetch(`${props.api_base_url}/api/v1/leads`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
                 body: JSON.stringify({
                     client_code: props.client.unique_code,
                     session_token: sessionId.value, // Usually the widget gets a session_token string back from ChatController, but here we just pass the Playground UUID for testing
@@ -129,7 +183,7 @@ async function handleLeadStep(text: string): Promise<boolean> {
                     trigger: 'intent',
                 }),
             });
-            
+
             leadCapturedThisSession.value = true;
             messages.value.push({
                 role: 'assistant',
@@ -146,7 +200,12 @@ async function handleLeadStep(text: string): Promise<boolean> {
             loading.value = false;
             setTimeout(() => {
                 leadStep.value = null;
-                leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+                leadData.value = {
+                    name: '',
+                    contact: '',
+                    notes: '',
+                    triggerMessage: '',
+                };
             }, 4000);
         }
 
@@ -176,7 +235,7 @@ async function send() {
         content: text,
         timestamp: new Date(),
     });
-    
+
     loading.value = true;
     requestCount.value++;
     scrollToBottom();
@@ -220,10 +279,14 @@ async function send() {
                 },
             });
 
-            if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
+            if (
+                data.lead_capture &&
+                !leadStep.value &&
+                !leadCapturedThisSession.value
+            ) {
                 leadData.value.triggerMessage = text;
                 leadStep.value = 'ask_name';
-                
+
                 setTimeout(() => {
                     messages.value.push({
                         role: 'assistant',
@@ -306,10 +369,32 @@ function parseMessage(text: string): string {
     const rawHtml = marked.parse(text) as string;
     return DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: [
-            'b', 'i', 'em', 'strong', 'a', 'p', 'br',
-            'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
-            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-            'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+            'b',
+            'i',
+            'em',
+            'strong',
+            'a',
+            'p',
+            'br',
+            'ul',
+            'ol',
+            'li',
+            'code',
+            'pre',
+            'blockquote',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'hr',
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
         ],
     });
 }

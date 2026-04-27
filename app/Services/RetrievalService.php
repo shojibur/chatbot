@@ -69,8 +69,90 @@ class RetrievalService
 
         $chunks->loadMissing('knowledgeSource:id,title');
 
-        return $chunks
+        return $this->filterRedundantChunks($chunks)
             ->map(fn (KnowledgeChunk $chunk, int $i) => '[Source '.($i + 1).': '.($chunk->knowledgeSource?->title ?? 'Unknown')."]\n".$chunk->content)
             ->implode("\n\n---\n\n");
+    }
+
+    /**
+     * Reduce repeated or highly overlapping chunks before prompt assembly.
+     *
+     * @param  Collection<int, KnowledgeChunk>  $chunks
+     * @return Collection<int, KnowledgeChunk>
+     */
+    private function filterRedundantChunks(Collection $chunks): Collection
+    {
+        $selected = collect();
+        $fingerprints = [];
+
+        foreach ($chunks as $chunk) {
+            $fingerprint = $this->chunkFingerprint($chunk->content);
+
+            if ($fingerprint === '') {
+                continue;
+            }
+
+            $isRedundant = collect($fingerprints)->contains(
+                fn (string $existing) => $this->areFingerprintsSimilar($existing, $fingerprint)
+            );
+
+            if ($isRedundant) {
+                continue;
+            }
+
+            $selected->push($chunk);
+            $fingerprints[] = $fingerprint;
+        }
+
+        return $selected->values();
+    }
+
+    private function chunkFingerprint(string $content): string
+    {
+        $normalized = mb_strtolower($content);
+        $normalized = preg_replace('/[^\pL\pN\s]/u', ' ', $normalized) ?? '';
+        $normalized = preg_replace('/\s+/u', ' ', trim($normalized)) ?? '';
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        $tokens = collect(explode(' ', $normalized))
+            ->filter(fn (string $token) => mb_strlen($token) > 2)
+            ->map(fn (string $token) => match ($token) {
+                'services' => 'service',
+                'offering', 'offerings', 'offers' => 'offer',
+                'provides', 'providing', 'provided' => 'provide',
+                default => $token,
+            })
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return implode(' ', $tokens);
+    }
+
+    private function areFingerprintsSimilar(string $left, string $right): bool
+    {
+        if ($left === $right || str_contains($left, $right) || str_contains($right, $left)) {
+            return true;
+        }
+
+        $leftTokens = array_values(array_filter(explode(' ', $left)));
+        $rightTokens = array_values(array_filter(explode(' ', $right)));
+
+        if ($leftTokens === [] || $rightTokens === []) {
+            return false;
+        }
+
+        $intersection = count(array_intersect($leftTokens, $rightTokens));
+        $union = count(array_unique([...$leftTokens, ...$rightTokens]));
+
+        if ($union === 0) {
+            return false;
+        }
+
+        return ($intersection / $union) >= 0.8;
     }
 }
