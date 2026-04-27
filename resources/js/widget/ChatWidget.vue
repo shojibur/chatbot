@@ -3,7 +3,7 @@
         :class="[
             'davey-widget',
             `davey-${config.widget_style}`,
-            isExpanded ? 'davey-expanded' : '',
+            isOpen && isExpanded ? 'davey-expanded' : '',
             isDarkMode ? 'davey-dark' : '',
         ]"
         :style="widgetStyle"
@@ -296,7 +296,7 @@ const expandedStyle = computed(() => ({
 }));
 
 const widgetStyle = computed(() => (
-    isExpanded.value
+    isOpen.value && isExpanded.value
         ? expandedStyle.value
         : positionStyle.value
 ));
