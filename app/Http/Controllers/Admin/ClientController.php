@@ -378,6 +378,7 @@ class ClientController extends Controller
             'position' => $validated['position'],
             'theme_mode' => $validated['theme_mode'],
             'show_branding' => $validated['show_branding'],
+            'default_expanded' => $validated['default_expanded'],
         ]);
 
         return [
@@ -470,6 +471,7 @@ class ClientController extends Controller
             'position' => Client::WIDGET_POSITIONS[0],
             'theme_mode' => Client::WIDGET_THEME_MODES[0],
             'show_branding' => true,
+            'default_expanded' => true,
             'notes' => '',
         ];
     }
@@ -544,6 +546,7 @@ class ClientController extends Controller
             'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
             'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
             'show_branding' => (bool) $settings->get('show_branding', true),
+            'default_expanded' => (bool) $settings->get('default_expanded', true),
             'notes' => $client->notes ?? '',
         ];
     }
@@ -597,6 +600,7 @@ class ClientController extends Controller
                 'position' => $settings->get('position', Client::WIDGET_POSITIONS[0]),
                 'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
                 'show_branding' => (bool) $settings->get('show_branding', true),
+                'default_expanded' => (bool) $settings->get('default_expanded', true),
             ],
             'created_at' => $client->created_at?->toDateTimeString(),
         ];

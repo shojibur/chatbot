@@ -25,6 +25,7 @@ const props = defineProps<{
         position: string;
         theme_mode: 'system' | 'light' | 'dark';
         show_branding: boolean;
+        default_expanded: boolean;
     };
     status?: string;
 }>();
@@ -330,6 +331,23 @@ onUnmounted(() => {
                                     <span
                                         class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
                                         :class="form.show_branding ? 'translate-x-5' : 'translate-x-0.5'"
+                                    />
+                                </button>
+                            </div>
+
+                            <div class="flex items-center justify-between rounded-xl border border-sidebar-border/50 bg-muted/20 px-4 py-3">
+                                <div>
+                                    <p class="text-sm font-medium">Open Expanded by Default</p>
+                                    <p class="text-xs text-muted-foreground">Launch the standalone widget in the near-fullscreen layout by default.</p>
+                                </div>
+                                <button
+                                    class="relative h-6 w-11 rounded-full transition-colors focus:outline-none"
+                                    :class="form.default_expanded ? 'bg-primary' : 'bg-muted-foreground/30'"
+                                    @click="form.default_expanded = !form.default_expanded"
+                                >
+                                    <span
+                                        class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+                                        :class="form.default_expanded ? 'translate-x-5' : 'translate-x-0.5'"
                                     />
                                 </button>
                             </div>

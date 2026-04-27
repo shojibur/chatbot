@@ -686,6 +686,21 @@ function submit(): void {
                             </label>
                             <InputError :message="form.errors.show_branding" />
                         </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label class="text-sm">Expanded default</Label>
+                            <label
+                                class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
+                            >
+                                <input
+                                    v-model="form.default_expanded"
+                                    type="checkbox"
+                                    class="size-4 rounded border-input"
+                                />
+                                Open the standalone widget expanded by default
+                            </label>
+                            <InputError :message="form.errors.default_expanded" />
+                        </div>
                     </CardContent>
                 </Card>
 

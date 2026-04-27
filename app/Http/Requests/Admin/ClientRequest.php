@@ -53,6 +53,7 @@ abstract class ClientRequest extends FormRequest
             'position' => ['required', Rule::in(Client::WIDGET_POSITIONS)],
             'theme_mode' => ['required', Rule::in(Client::WIDGET_THEME_MODES)],
             'show_branding' => ['required', 'boolean'],
+            'default_expanded' => ['required', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

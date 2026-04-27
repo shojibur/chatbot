@@ -56,6 +56,7 @@ class PlaygroundController extends Controller
                 'position' => $settings->get('position', 'right'),
                 'theme_mode' => $settings->get('theme_mode', 'system'),
                 'show_branding' => (bool) $settings->get('show_branding', true),
+                'default_expanded' => (bool) $settings->get('default_expanded', true),
             ],
         ];
     }

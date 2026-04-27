@@ -40,6 +40,7 @@ export type WidgetSettings = {
     position: string;
     theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
+    default_expanded: boolean;
 };
 
 export type ClientListItem = {
@@ -87,6 +88,7 @@ export type ClientFormRecord = {
     position: string;
     theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
+    default_expanded: boolean;
     notes: string;
 };
 

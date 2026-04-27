@@ -205,6 +205,7 @@ interface WidgetConfig {
         position?: string;
         theme_mode?: 'system' | 'light' | 'dark';
         show_branding?: boolean;
+        default_expanded?: boolean;
     };
     welcome_message: string;
 }
@@ -224,8 +225,13 @@ const props = defineProps<{
     config: WidgetConfig;
 }>();
 
+const expandedStorageKey = `davey_is_expanded_${props.clientCode}`;
 const isOpen = ref(sessionStorage.getItem('davey_is_open') === 'true');
-const isExpanded = ref(sessionStorage.getItem('davey_is_expanded') === 'true');
+const isExpanded = ref(
+    sessionStorage.getItem(expandedStorageKey) === null
+        ? props.config.widget_settings?.default_expanded !== false
+        : sessionStorage.getItem(expandedStorageKey) === 'true',
+);
 const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
@@ -322,7 +328,7 @@ function toggleOpen() {
 
 function toggleExpanded() {
     isExpanded.value = !isExpanded.value;
-    sessionStorage.setItem('davey_is_expanded', String(isExpanded.value));
+    sessionStorage.setItem(expandedStorageKey, String(isExpanded.value));
     scrollToBottom();
 }
 

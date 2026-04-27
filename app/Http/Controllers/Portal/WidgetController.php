@@ -33,6 +33,7 @@ class WidgetController extends Controller
                 'position'        => $settings->get('position', 'right'),
                 'theme_mode'      => $settings->get('theme_mode', 'system'),
                 'show_branding'   => (bool) $settings->get('show_branding', true),
+                'default_expanded' => (bool) $settings->get('default_expanded', true),
             ],
             'status' => $request->session()->get('status'),
         ]);
@@ -52,6 +53,7 @@ class WidgetController extends Controller
             'position'        => ['required', 'in:' . implode(',', Client::WIDGET_POSITIONS)],
             'theme_mode'      => ['required', 'in:' . implode(',', Client::WIDGET_THEME_MODES)],
             'show_branding'   => ['boolean'],
+            'default_expanded' => ['boolean'],
         ]);
 
         $existingSettings = collect($client->widget_settings ?? [])->toArray();
@@ -71,6 +73,7 @@ class WidgetController extends Controller
             'position'        => $validated['position'],
             'theme_mode'      => $validated['theme_mode'],
             'show_branding'   => (bool) ($validated['show_branding'] ?? false),
+            'default_expanded' => (bool) ($validated['default_expanded'] ?? true),
         ]);
 
         $client->update([
