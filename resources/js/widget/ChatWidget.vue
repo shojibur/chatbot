@@ -3,9 +3,10 @@
         :class="[
             'davey-widget',
             `davey-${config.widget_style}`,
+            isExpanded ? 'davey-expanded' : '',
             isDarkMode ? 'davey-dark' : '',
         ]"
-        :style="positionStyle"
+        :style="widgetStyle"
     >
         <!-- Modern Style Pill -->
         <button
@@ -66,9 +67,50 @@
                         Online now
                     </span>
                 </div>
-                <button class="davey-close" @click="toggleOpen()">
-                    &times;
-                </button>
+                <div class="davey-header-actions">
+                    <button
+                        class="davey-header-action"
+                        :aria-label="isExpanded ? 'Shrink chat widget' : 'Expand chat widget'"
+                        :title="isExpanded ? 'Shrink' : 'Expand'"
+                        @click="toggleExpanded()"
+                    >
+                        <svg
+                            v-if="!isExpanded"
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                        <svg
+                            v-else
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <polyline points="14 10 21 3" />
+                            <polyline points="3 21 10 14" />
+                            <polyline points="21 9 21 3 15 3" />
+                            <polyline points="3 15 3 21 9 21" />
+                        </svg>
+                    </button>
+                    <button class="davey-close" aria-label="Close chat widget" @click="toggleOpen()">
+                        &times;
+                    </button>
+                </div>
             </div>
 
             <!-- Messages -->
@@ -183,6 +225,7 @@ const props = defineProps<{
 }>();
 
 const isOpen = ref(sessionStorage.getItem('davey_is_open') === 'true');
+const isExpanded = ref(sessionStorage.getItem('davey_is_expanded') === 'true');
 const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
@@ -239,6 +282,19 @@ const positionStyle = computed(() => {
         : { right: '20px', left: 'auto' };
 });
 
+const expandedStyle = computed(() => ({
+    top: '32px',
+    right: '32px',
+    bottom: '32px',
+    left: '32px',
+}));
+
+const widgetStyle = computed(() => (
+    isExpanded.value
+        ? expandedStyle.value
+        : positionStyle.value
+));
+
 const inputPlaceholder = computed(() => {
     if (leadStep.value === 'ask_name') {
         return 'Enter your name…';
@@ -262,6 +318,12 @@ const inputPlaceholder = computed(() => {
 function toggleOpen() {
     isOpen.value = !isOpen.value;
     sessionStorage.setItem('davey_is_open', String(isOpen.value));
+}
+
+function toggleExpanded() {
+    isExpanded.value = !isExpanded.value;
+    sessionStorage.setItem('davey_is_expanded', String(isExpanded.value));
+    scrollToBottom();
 }
 
 function syncDarkModePreference() {

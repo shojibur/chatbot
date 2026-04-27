@@ -11,6 +11,13 @@
     box-sizing: border-box;
 }
 
+.davey-widget.davey-expanded {
+    top: 32px;
+    right: 32px;
+    bottom: 32px;
+    left: 32px;
+}
+
 .davey-widget *,
 .davey-widget *::before,
 .davey-widget *::after {
@@ -99,6 +106,12 @@
     background: #fff;
 }
 
+.davey-widget.davey-expanded .davey-panel {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+}
+
 /* ── Style: Classic ── */
 .davey-classic .davey-panel {
     background: #fff;
@@ -168,6 +181,11 @@
     font-weight: 600;
     font-size: 15px;
 }
+.davey-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
 .davey-header-status {
     display: flex;
     align-items: center;
@@ -189,14 +207,37 @@
     70% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
 }
+.davey-header-action,
 .davey-close {
     background: none;
     border: none;
     color: #fff;
-    font-size: 22px;
     cursor: pointer;
-    padding: 0 4px;
+    padding: 0;
     line-height: 1;
+}
+.davey-header-action {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.14);
+    transition: background 0.2s ease;
+}
+.davey-header-action:hover,
+.davey-close:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+.davey-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Messages area */
@@ -206,6 +247,10 @@
     padding: 16px;
     min-height: 300px;
     max-height: 380px;
+}
+
+.davey-widget.davey-expanded .davey-messages {
+    max-height: none;
 }
 
 .davey-msg {
@@ -448,4 +493,13 @@
 
 .davey-dark .davey-typing span {
     background: #cbd5e1;
+}
+
+@media (max-width: 640px) {
+    .davey-widget.davey-expanded {
+        top: 24px;
+        right: 24px;
+        bottom: 24px;
+        left: 24px;
+    }
 }
