@@ -36,7 +36,7 @@ class ClientFactory extends Factory
             'system_prompt' => 'Answer only from the provided knowledge base. If unsure, say you do not know.',
             'chat_model' => fake()->randomElement(Client::CHAT_MODELS),
             'embedding_model' => fake()->randomElement(Client::EMBEDDING_MODELS),
-            'retrieval_chunk_count' => fake()->numberBetween(3, 5),
+            'retrieval_chunk_count' => 3,
             'cache_ttl_hours' => fake()->numberBetween(12, 72),
             'prompt_caching_enabled' => true,
             'semantic_cache_enabled' => true,

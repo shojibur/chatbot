@@ -105,7 +105,7 @@ class ClientSeeder extends Seeder
                 'system_prompt' => 'You are the friendly virtual assistant for The Hawaii Agency. Answer questions about our services, pricing, and expertise using the approved knowledge base. Be helpful and conversational. If specific details are missing, encourage the visitor to call (808) 437-5445 or visit our contact page.',
                 'chat_model' => 'gpt-4o-mini',
                 'embedding_model' => 'text-embedding-3-small',
-                'retrieval_chunk_count' => 5,
+                'retrieval_chunk_count' => 3,
                 'cache_ttl_hours' => 24,
                 'prompt_caching_enabled' => true,
                 'semantic_cache_enabled' => true,
