@@ -8,9 +8,11 @@ use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Services\LeadCaptureService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class LeadController extends Controller
 {
@@ -62,13 +64,25 @@ class LeadController extends Controller
             'trigger'               => $data['trigger'] ?? 'intent',
         ]);
 
-        // Notify the client's contact email about the new lead
+        // Lead persistence should not fail just because notification delivery does.
         if ($client->contact_email) {
-            Mail::to($client->contact_email)
-                ->send(new NewLeadCaptured($lead->load('client')));
+            try {
+                Mail::to($client->contact_email)
+                    ->queue(new NewLeadCaptured($lead->load('client')));
+            } catch (Throwable $e) {
+                Log::warning('Lead saved but notification failed to queue.', [
+                    'lead_id' => $lead->id,
+                    'client_id' => $client->id,
+                    'contact_email' => $client->contact_email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'lead_id' => $lead->id,
+        ]);
     }
 
     public function process(Request $request): JsonResponse

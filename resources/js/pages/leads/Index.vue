@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Eye, Search } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { Eye, Search, Trash2 } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
@@ -42,6 +42,7 @@ type Props = {
         client_id?: string;
         status?: string;
     };
+    status?: string;
 };
 
 const props = defineProps<Props>();
@@ -53,17 +54,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const filterClient = ref(props.filters.client_id || 'all');
 const filterStatus = ref(props.filters.status || 'all');
+const deleteTarget = ref<LeadRow | null>(null);
+const deleting = ref(false);
 
 watch([filterClient, filterStatus], () => {
     const params: Record<string, string> = {};
-    if (filterClient.value !== 'all') params.client_id = filterClient.value;
-    if (filterStatus.value !== 'all') params.status = filterStatus.value;
+
+    if (filterClient.value !== 'all') {
+        params.client_id = filterClient.value;
+    }
+
+    if (filterStatus.value !== 'all') {
+        params.status = filterStatus.value;
+    }
 
     router.get('/leads', params, { preserveState: true, replace: true });
 });
 
 function formatDate(value: string): string {
     const dateStr = value.endsWith('Z') ? value : value + 'Z';
+
     return new Date(dateStr).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -72,15 +82,54 @@ function formatDate(value: string): string {
 }
 
 function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
-    if (status === 'new') return 'default';
-    if (status === 'contacted') return 'secondary';
+    if (status === 'new') {
+        return 'default';
+    }
+
+    if (status === 'contacted') {
+        return 'secondary';
+    }
+
     return 'outline';
 }
 
 function badgeColor(status: string) {
-    if (status === 'new') return 'bg-amber-500 hover:bg-amber-600';
-    if (status === 'contacted') return 'bg-blue-500 hover:bg-blue-600 text-white';
+    if (status === 'new') {
+        return 'bg-amber-500 hover:bg-amber-600';
+    }
+
+    if (status === 'contacted') {
+        return 'bg-blue-500 hover:bg-blue-600 text-white';
+    }
+
     return '';
+}
+
+const statusMessage = computed(() => {
+    if (props.status === 'lead-deleted') {
+        return 'Lead removed successfully.';
+    }
+
+    return null;
+});
+
+function confirmDelete(lead: LeadRow) {
+    deleteTarget.value = lead;
+}
+
+function executeDelete() {
+    if (!deleteTarget.value) {
+        return;
+    }
+
+    deleting.value = true;
+    router.delete(`/leads/${deleteTarget.value.id}`, {
+        preserveScroll: true,
+        onFinish: () => {
+            deleting.value = false;
+            deleteTarget.value = null;
+        },
+    });
 }
 </script>
 
@@ -96,6 +145,10 @@ function badgeColor(status: string) {
                         {{ leads.total }} total contacts collected from your chatbots.
                     </p>
                 </div>
+            </div>
+
+            <div v-if="statusMessage" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-900/10 dark:text-emerald-400">
+                {{ statusMessage }}
             </div>
 
             <!-- Filters -->
@@ -137,17 +190,18 @@ function badgeColor(status: string) {
 
             <!-- Table -->
             <div v-else class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card text-card-foreground shadow-sm">
-                <div class="hidden border-b border-sidebar-border/70 bg-muted/30 px-6 py-3 text-xs font-medium tracking-wider text-muted-foreground uppercase md:grid md:grid-cols-[1fr_1fr_2fr_auto_auto]">
+                <div class="hidden border-b border-sidebar-border/70 bg-muted/30 px-6 py-3 text-xs font-medium tracking-wider text-muted-foreground uppercase md:grid md:grid-cols-[1fr_1fr_2fr_auto_auto_auto]">
                     <span>Lead Data</span>
                     <span>Client</span>
                     <span>Trigger Request</span>
                     <span>Status</span>
                     <span class="w-16 text-right">View</span>
+                    <span class="w-16 text-right">Delete</span>
                 </div>
 
                 <div class="divide-y divide-sidebar-border/70">
                     <div v-for="lead in leads.data" :key="lead.id" class="group transition hover:bg-accent/30">
-                        <div class="hidden items-center gap-4 px-6 py-4 md:grid md:grid-cols-[1fr_1fr_2fr_auto_auto]">
+                        <div class="hidden items-center gap-4 px-6 py-4 md:grid md:grid-cols-[1fr_1fr_2fr_auto_auto_auto]">
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-medium">
                                     {{ lead.name }}
@@ -188,6 +242,17 @@ function badgeColor(status: string) {
                                     </Link>
                                 </Button>
                             </div>
+
+                            <div class="flex w-16 justify-end">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="size-8 text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                                    @click="confirmDelete(lead)"
+                                >
+                                    <Trash2 class="size-4" />
+                                </Button>
+                            </div>
                         </div>
 
                         <!-- Mobile view -->
@@ -211,9 +276,19 @@ function badgeColor(status: string) {
                                 <span class="text-muted-foreground">
                                     Client: <span class="font-medium">{{ lead.client.name }}</span>
                                 </span>
-                                <Button size="sm" variant="outline" as-child>
-                                    <Link :href="`/leads/${lead.id}`">Details &rarr;</Link>
-                                </Button>
+                                <div class="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        class="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20"
+                                        @click="confirmDelete(lead)"
+                                    >
+                                        Delete
+                                    </Button>
+                                    <Button size="sm" variant="outline" as-child>
+                                        <Link :href="`/leads/${lead.id}`">Details &rarr;</Link>
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -237,6 +312,15 @@ function badgeColor(status: string) {
                     </div>
                 </div>
             </div>
+
+            <ConfirmDeleteDialog
+                :open="!!deleteTarget"
+                title="Remove Lead"
+                :description="`Are you sure you want to permanently delete the lead for '${deleteTarget?.name}'? This cannot be undone.`"
+                :processing="deleting"
+                @close="deleteTarget = null"
+                @confirm="executeDelete"
+            />
         </div>
     </AppLayout>
 </template>

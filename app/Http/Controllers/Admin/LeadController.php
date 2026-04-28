@@ -24,6 +24,7 @@ class LeadController extends Controller
             'leads'   => $leads,
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'filters' => $request->only(['client_id', 'status']),
+            'status' => $request->session()->get('status'),
         ]);
     }
 
@@ -43,5 +44,12 @@ class LeadController extends Controller
         $lead->update(['status' => $data['status']]);
 
         return back();
+    }
+
+    public function destroy(Lead $lead)
+    {
+        $lead->delete();
+
+        return to_route('leads.index')->with('status', 'lead-deleted');
     }
 }

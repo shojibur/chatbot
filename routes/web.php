@@ -57,6 +57,7 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     Route::patch('leads/{lead}/status', [LeadController::class, 'updateStatus'])->name('leads.status');
+    Route::delete('leads/{lead}', [LeadController::class, 'destroy'])->name('leads.destroy');
 
     Route::resource('users', UserController::class);
 });
