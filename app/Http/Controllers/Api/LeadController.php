@@ -22,7 +22,7 @@ class LeadController extends Controller
             'contact'       => 'required|string|max:255',
             'user_request'  => 'nullable|string|max:1000',
             'notes'         => 'nullable|string|max:1000',
-            'trigger'       => 'nullable|in:intent,no_answer,manual',
+            'trigger'       => 'nullable|in:ai,intent,no_answer,manual',
         ]);
 
         $client = Client::where('unique_code', $data['client_code'])

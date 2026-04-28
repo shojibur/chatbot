@@ -9,14 +9,6 @@ class IntentDetectionService
         private readonly AiModelCatalog $modelCatalog,
     ) {}
 
-    /**
-     * Deterministic contact-intent phrases that should always trigger lead capture.
-     *
-     * These run before the AI classifier so clear requests like
-     * "how can I contact them?" trigger immediately and consistently.
-     *
-     * @var list<string>
-     */
     private const DIRECT_CONTACT_PATTERNS = [
         '/\bcontact\b/i',
         '/\breach\s+(?:out|you|them)\b/i',
@@ -33,21 +25,14 @@ class IntentDetectionService
     ];
 
     /**
-     * Use a fast, cheap AI call to decide if lead capture should trigger.
+     * Decide whether lead capture should trigger, preferring the AI classifier.
      *
-     * Analyses both the user's message and the chatbot's answer together,
-     * so it catches cases like "What do you charge?" → "We don't have pricing info"
-     * that keyword matching would miss.
+     * Returns a structured decision so callers can persist the trigger source.
      *
-     * Cost: ~100 tokens on gpt-4o-mini ≈ $0.00002 per call.
+     * @return array{capture: bool, trigger: string|null}
      */
-    public function shouldCaptureLead(string $userMessage, string $botAnswer): bool
+    public function detectLeadCapture(string $userMessage, string $botAnswer): array
     {
-        // Hard-rule: explicit contact intent should always trigger lead capture.
-        if ($this->hasDirectContactIntent($userMessage)) {
-            return true;
-        }
-
         $prompt = <<<PROMPT
 You are a lead-capture classifier for a business chatbot. Given the visitor's message and the bot's reply, decide if this visitor is ready to be contacted by the business.
 
@@ -89,11 +74,24 @@ PROMPT;
 
             $result = mb_strtolower(trim($response->choices[0]->message->content ?? ''));
 
-            return $result === 'yes';
+            return [
+                'capture' => $result === 'yes',
+                'trigger' => $result === 'yes' ? 'ai' : null,
+            ];
         } catch (\Throwable) {
-            // If the classification call fails, don't block the chat — just skip lead capture
-            return false;
+            // If the classification call fails, use a narrow fallback for explicit contact requests.
+            $fallbackCapture = $this->hasDirectContactIntent($userMessage);
+
+            return [
+                'capture' => $fallbackCapture,
+                'trigger' => $fallbackCapture ? 'intent' : null,
+            ];
         }
+    }
+
+    public function shouldCaptureLead(string $userMessage, string $botAnswer): bool
+    {
+        return $this->detectLeadCapture($userMessage, $botAnswer)['capture'];
     }
 
     private function hasDirectContactIntent(string $userMessage): bool

@@ -243,7 +243,13 @@ const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_to
 
 // --- Lead Capture State ---
 const leadStep = ref<LeadStep>(null);
-const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+const leadData = ref({
+    name: '',
+    contact: '',
+    notes: '',
+    triggerMessage: '',
+    trigger: 'ai',
+});
 const leadCapturedThisSession = ref(sessionStorage.getItem('davey_lead_captured') === 'true');
 const isDarkMode = ref(false);
 let darkModeMedia: MediaQueryList | null = null;
@@ -432,7 +438,13 @@ function userIsRefusing(text: string): boolean {
 
 function cancelLeadCapture() {
     leadStep.value = null;
-    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    leadData.value = {
+        name: '',
+        contact: '',
+        notes: '',
+        triggerMessage: '',
+        trigger: 'ai',
+    };
     addBotMessage(
         `No problem at all! Feel free to continue chatting — I'm here if you need anything.`,
         true,
@@ -488,7 +500,13 @@ async function finalizeLeadCapture() {
         loading.value = false;
         setTimeout(() => {
             leadStep.value = null;
-            leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+            leadData.value = {
+                name: '',
+                contact: '',
+                notes: '',
+                triggerMessage: '',
+                trigger: 'ai',
+            };
         }, 4000);
     }
 }
@@ -559,7 +577,7 @@ async function saveLead() {
         contact:      leadData.value.contact,
         user_request: leadData.value.triggerMessage,
         notes:        leadData.value.notes,
-        trigger:      'intent',
+        trigger:      leadData.value.trigger,
     };
 
     if (sessionToken.value) {
@@ -639,6 +657,7 @@ async function send() {
             // Trigger lead capture flow if backend signals it (only once per session)
             if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
                 leadData.value.triggerMessage = text;
+                leadData.value.trigger = data.lead_trigger ?? 'ai';
                 leadStep.value = 'ask_name';
 
                 setTimeout(() => {

@@ -85,6 +85,7 @@ class ChatController extends Controller
                 'cached' => false,
                 'session_token' => $chatSession->session_token,
                 'lead_capture' => false,
+                'lead_trigger' => null,
                 'policy_blocked' => true,
             ]);
         }
@@ -119,14 +120,16 @@ class ChatController extends Controller
 
                 $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
 
-                $leadCapture = ! $leadAlreadyCaptured
-                    && $this->intentService->shouldCaptureLead($message, $cachedAnswer);
+                $leadDecision = ! $leadAlreadyCaptured
+                    ? $this->intentService->detectLeadCapture($message, $cachedAnswer)
+                    : ['capture' => false, 'trigger' => null];
 
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
                     'session_token' => $chatSession->session_token,
-                    'lead_capture' => $leadCapture,
+                    'lead_capture' => $leadDecision['capture'],
+                    'lead_trigger' => $leadDecision['trigger'],
                 ]);
             }
         }
@@ -223,14 +226,16 @@ class ChatController extends Controller
         $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
 
         // AI-powered intent classification — analyses both question and answer
-        $leadCapture = ! $leadAlreadyCaptured
-            && $this->intentService->shouldCaptureLead($message, $answer);
+        $leadDecision = ! $leadAlreadyCaptured
+            ? $this->intentService->detectLeadCapture($message, $answer)
+            : ['capture' => false, 'trigger' => null];
 
         return response()->json([
             'answer' => $answer,
             'cached' => false,
             'session_token' => $chatSession->session_token,
-            'lead_capture' => $leadCapture,
+            'lead_capture' => $leadDecision['capture'],
+            'lead_trigger' => $leadDecision['trigger'],
         ]);
     }
 

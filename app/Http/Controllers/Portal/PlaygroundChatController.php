@@ -90,6 +90,8 @@ class PlaygroundChatController extends Controller
                 'chunks_used' => 0,
                 'tokens_used' => 0,
                 'response_time_ms' => null,
+                'lead_capture' => false,
+                'lead_trigger' => null,
                 'policy_blocked' => true,
             ]);
         }
@@ -118,9 +120,15 @@ class PlaygroundChatController extends Controller
                     'meta' => ['source' => 'playground'],
                 ]);
 
+                $leadDecision = ! $leadAlreadyCaptured
+                    ? $this->intentService->detectLeadCapture($message, $cachedAnswer)
+                    : ['capture' => false, 'trigger' => null];
+
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
+                    'lead_capture' => $leadDecision['capture'],
+                    'lead_trigger' => $leadDecision['trigger'],
                 ]);
             }
         }
@@ -196,12 +204,18 @@ class PlaygroundChatController extends Controller
         $cleanAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $answer));
         $this->chatHistoryService->logAssistantMessage($chatSession, $cleanAnswer, $totalTokens);
 
+        $leadDecision = ! $leadAlreadyCaptured
+            ? $this->intentService->detectLeadCapture($message, $cleanAnswer)
+            : ['capture' => false, 'trigger' => null];
+
         return response()->json([
             'answer' => $cleanAnswer,
             'cached' => false,
             'chunks_used' => $chunks->count(),
             'tokens_used' => $totalTokens,
             'response_time_ms' => null, // computed client-side
+            'lead_capture' => $leadDecision['capture'],
+            'lead_trigger' => $leadDecision['trigger'],
         ]);
     }
 

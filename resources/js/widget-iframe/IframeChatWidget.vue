@@ -134,7 +134,13 @@ const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
 const leadStep = ref<LeadStep>(null);
-const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+const leadData = ref({
+    name: '',
+    contact: '',
+    notes: '',
+    triggerMessage: '',
+    trigger: 'ai',
+});
 const isDarkMode = ref(false);
 let darkModeMedia: MediaQueryList | null = null;
 
@@ -317,7 +323,13 @@ function userIsRefusing(text: string): boolean {
 
 function cancelLeadCapture() {
     leadStep.value = null;
-    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    leadData.value = {
+        name: '',
+        contact: '',
+        notes: '',
+        triggerMessage: '',
+        trigger: 'ai',
+    };
     addBotMessage(
         'No problem. You can continue chatting, and I can still help here.',
         true,
@@ -373,7 +385,13 @@ async function finalizeLeadCapture() {
         loading.value = false;
         setTimeout(() => {
             leadStep.value = null;
-            leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+            leadData.value = {
+                name: '',
+                contact: '',
+                notes: '',
+                triggerMessage: '',
+                trigger: 'ai',
+            };
         }, 4000);
     }
 }
@@ -439,7 +457,7 @@ async function saveLead() {
         contact: leadData.value.contact,
         user_request: leadData.value.triggerMessage,
         notes: leadData.value.notes,
-        trigger: 'intent',
+        trigger: leadData.value.trigger,
     };
 
     if (sessionToken.value) {
@@ -509,6 +527,7 @@ async function send() {
 
             if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
                 leadData.value.triggerMessage = text;
+                leadData.value.trigger = data.lead_trigger ?? 'ai';
                 leadStep.value = 'ask_name';
 
                 setTimeout(() => {

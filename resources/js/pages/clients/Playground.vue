@@ -76,7 +76,13 @@ if (welcomeMessage) {
 type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
 const leadStep = ref<LeadStep>(null);
 const leadCapturedThisSession = ref(false);
-const leadData = ref({ name: '', contact: '', notes: '', triggerMessage: '' });
+const leadData = ref({
+    name: '',
+    contact: '',
+    notes: '',
+    triggerMessage: '',
+    trigger: 'ai',
+});
 
 function userIsRefusing(text: string): boolean {
     const lower = text.toLowerCase().trim();
@@ -115,7 +121,13 @@ function userIsRefusing(text: string): boolean {
 
 function cancelLeadCapture(): void {
     leadStep.value = null;
-    leadData.value = { name: '', contact: '', notes: '', triggerMessage: '' };
+    leadData.value = {
+        name: '',
+        contact: '',
+        notes: '',
+        triggerMessage: '',
+        trigger: 'ai',
+    };
     messages.value.push({
         role: 'assistant',
         content: `No problem at all. Feel free to keep chatting and ask anything else.`,
@@ -170,7 +182,7 @@ async function finalizeLeadCapture(): Promise<void> {
                 contact: leadData.value.contact,
                 user_request: leadData.value.triggerMessage,
                 notes: leadData.value.notes,
-                trigger: 'intent',
+                trigger: leadData.value.trigger,
             }),
         });
 
@@ -195,6 +207,7 @@ async function finalizeLeadCapture(): Promise<void> {
                 contact: '',
                 notes: '',
                 triggerMessage: '',
+                trigger: 'ai',
             };
         }, 4000);
     }
@@ -329,6 +342,7 @@ async function send() {
                 !leadCapturedThisSession.value
             ) {
                 leadData.value.triggerMessage = text;
+                leadData.value.trigger = data.lead_trigger ?? 'ai';
                 leadStep.value = 'ask_name';
 
                 setTimeout(() => {

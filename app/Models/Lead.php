@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Lead extends Model
 {
-    public const TRIGGERS = ['intent', 'no_answer', 'manual'];
+    public const TRIGGERS = ['ai', 'intent', 'no_answer', 'manual'];
     public const STATUSES = ['new', 'contacted', 'closed'];
 
     protected $fillable = [

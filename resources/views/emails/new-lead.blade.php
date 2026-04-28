@@ -81,7 +81,9 @@
                                                     <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.3;">{{ $lead->name }}</h1>
                                                 </td>
                                                 <td style="text-align: right; vertical-align: top;">
-                                                    @if($lead->trigger === 'intent')
+                                                    @if($lead->trigger === 'ai')
+                                                        <span style="display: inline-block; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: rgba(96, 165, 250, 0.2); color: #60a5fa;">AI Qualified</span>
+                                                    @elseif($lead->trigger === 'intent')
                                                         <span style="display: inline-block; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: rgba(251, 191, 36, 0.2); color: #fbbf24;">Buying Intent</span>
                                                     @elseif($lead->trigger === 'no_answer')
                                                         <span style="display: inline-block; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; background-color: rgba(248, 113, 113, 0.2); color: #f87171;">No Answer</span>
