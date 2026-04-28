@@ -24,6 +24,17 @@ class IntentDetectionService
         '/\bemail\s+(?:address|you|them)\b/i',
     ];
 
+    private const BOT_CONTACT_REQUEST_PATTERNS = [
+        '/\b(?:may|can)\s+i\s+get\s+your\s+name\b/i',
+        '/\bwhat(?:\'?s|\s+is)\s+your\s+name\b/i',
+        '/\bwhat(?:\'?s|\s+is)\s+the\s+best\s+(?:phone\s+number|number|email|email\s+address|way\s+to\s+reach\s+you)\b/i',
+        '/\bbest\s+(?:phone\s+number|number|email|email\s+address)\s+to\s+reach\s+you\b/i',
+        '/\b(?:share|leave|provide|send)\s+(?:your\s+)?(?:phone\s+number|number|email|email\s+address|contact\s+details)\b/i',
+        '/\bcontact\s+details\b/i',
+        '/\bhow\s+can\s+we\s+reach\s+you\b/i',
+        '/\bour\s+team\s+can\s+follow\s+up\b/i',
+    ];
+
     /**
      * Decide whether lead capture should trigger, preferring the AI classifier.
      *
@@ -33,6 +44,20 @@ class IntentDetectionService
      */
     public function detectLeadCapture(string $userMessage, string $botAnswer): array
     {
+        if ($this->hasDirectContactIntent($userMessage)) {
+            return [
+                'capture' => true,
+                'trigger' => 'intent',
+            ];
+        }
+
+        if ($this->botRequestsLeadDetails($botAnswer)) {
+            return [
+                'capture' => true,
+                'trigger' => 'ai',
+            ];
+        }
+
         $prompt = <<<PROMPT
 You are a lead-capture classifier for a business chatbot. Given the visitor's message and the bot's reply, decide if this visitor is ready to be contacted by the business.
 
@@ -103,5 +128,20 @@ PROMPT;
         }
 
         return false;
+    }
+
+    private function botRequestsLeadDetails(string $botAnswer): bool
+    {
+        $asksForName = preg_match('/\bname\b/i', $botAnswer) === 1;
+        $asksForReachability = false;
+
+        foreach (self::BOT_CONTACT_REQUEST_PATTERNS as $pattern) {
+            if (preg_match($pattern, $botAnswer) === 1) {
+                $asksForReachability = true;
+                break;
+            }
+        }
+
+        return $asksForName && $asksForReachability;
     }
 }
