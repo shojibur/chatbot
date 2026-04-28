@@ -73,7 +73,7 @@ if (welcomeMessage) {
 }
 
 // Lead capture state
-type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
+type LeadStep = null | 'ask_name' | 'ask_contact' | 'done';
 const leadStep = ref<LeadStep>(null);
 const leadCapturedThisSession = ref(false);
 const leadData = ref({
@@ -134,33 +134,6 @@ function cancelLeadCapture(): void {
         timestamp: new Date(),
     });
     scrollToBottom();
-}
-
-function extractLeadIdentity(text: string): { name: string; contact: string } | null {
-    const normalized = text.trim().replace(/\s+/g, ' ');
-    const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-
-    if (emailMatch) {
-        const contact = emailMatch[0].trim();
-        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
-
-        if (name) {
-            return { name, contact };
-        }
-    }
-
-    const phoneMatch = normalized.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
-
-    if (phoneMatch) {
-        const contact = phoneMatch[0].trim();
-        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
-
-        if (name) {
-            return { name, contact };
-        }
-    }
-
-    return null;
 }
 
 async function finalizeLeadCapture(): Promise<void> {
@@ -227,47 +200,65 @@ async function handleLeadStep(text: string): Promise<boolean> {
         return true;
     }
 
-    if (leadStep.value === 'ask_name') {
-        const identity = extractLeadIdentity(text);
+    const res = await fetch(`${props.api_base_url}/api/v1/leads/process`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({
+            client_code: props.client.unique_code,
+            step: leadStep.value,
+            message: text,
+            lead_data: {
+                name: leadData.value.name,
+                contact: leadData.value.contact,
+            },
+        }),
+    });
 
-        if (identity) {
-            leadData.value.name = identity.name;
-            leadData.value.contact = identity.contact;
+    const data = await res.json();
+
+    if (!res.ok) {
+        messages.value.push({
+            role: 'assistant',
+            content: 'Sorry, I had trouble processing that. Please try again.',
+            timestamp: new Date(),
+        });
+        return true;
+    }
+
+    leadData.value.name = data.name ?? leadData.value.name;
+    leadData.value.contact = data.contact ?? leadData.value.contact;
+
+    if (data.cancel_capture) {
+        leadStep.value = null;
+        messages.value.push({
+            role: 'assistant',
+            content: data.assistant_message || 'No problem at all. Feel free to keep chatting if you need anything else.',
+            timestamp: new Date(),
+        });
+        return true;
+    }
+
+    if (data.next_step === 'done') {
+        if (data.assistant_message) {
             messages.value.push({
                 role: 'assistant',
-                content: `Thanks ${leadData.value.name}! We've got your contact details.`,
+                content: data.assistant_message,
                 timestamp: new Date(),
             });
-            await finalizeLeadCapture();
-            return true;
         }
-
-        leadData.value.name = text;
-        leadStep.value = 'ask_contact';
-        messages.value.push({
-            role: 'assistant',
-            content: `Thanks ${leadData.value.name}! 📱 What's the best phone number or email address to reach you?`,
-            timestamp: new Date(),
-        });
-        return true;
-    }
-
-    if (leadStep.value === 'ask_contact') {
-        leadData.value.contact = text;
-        leadStep.value = 'ask_notes';
-        messages.value.push({
-            role: 'assistant',
-            content: `Got it! One last thing — can you briefly describe what you need help with?`,
-            timestamp: new Date(),
-        });
-        return true;
-    }
-
-    if (leadStep.value === 'ask_notes') {
-        leadData.value.notes = text;
         await finalizeLeadCapture();
         return true;
     }
+
+    leadStep.value = data.next_step ?? leadStep.value;
+    messages.value.push({
+        role: 'assistant',
+        content: data.assistant_message || 'Could you share that one more time?',
+        timestamp: new Date(),
+    });
 
     return false;
 }
@@ -348,7 +339,7 @@ async function send() {
                 setTimeout(() => {
                     messages.value.push({
                         role: 'assistant',
-                        content: leadCaptureIntroMessage.value,
+                        content: data.lead_capture_prompt || leadCaptureIntroMessage.value,
                         timestamp: new Date(),
                     });
                     scrollToBottom();

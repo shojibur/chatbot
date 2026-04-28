@@ -121,7 +121,7 @@ interface Message {
     isLead?: boolean;
 }
 
-type LeadStep = null | 'ask_name' | 'ask_contact' | 'ask_notes' | 'done';
+type LeadStep = null | 'ask_name' | 'ask_contact' | 'done';
 
 const props = defineProps<{
     clientCode: string;
@@ -196,7 +196,6 @@ const leadMessageStyle = computed(() =>
 const inputPlaceholder = computed(() => {
     if (leadStep.value === 'ask_name') return 'Enter your name...';
     if (leadStep.value === 'ask_contact') return 'Phone number or email...';
-    if (leadStep.value === 'ask_notes') return 'Briefly describe what you need...';
     if (leadStep.value === 'done') return 'Thank you';
     return 'Type a message...';
 });
@@ -336,33 +335,6 @@ function cancelLeadCapture() {
     );
 }
 
-function extractLeadIdentity(text: string): { name: string; contact: string } | null {
-    const normalized = text.trim().replace(/\s+/g, ' ');
-    const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-
-    if (emailMatch) {
-        const contact = emailMatch[0].trim();
-        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
-
-        if (name) {
-            return { name, contact };
-        }
-    }
-
-    const phoneMatch = normalized.match(/(?:\+?\d[\d\s().-]{7,}\d)/);
-
-    if (phoneMatch) {
-        const contact = phoneMatch[0].trim();
-        const name = normalized.replace(contact, '').trim().replace(/[,:;|/-]+$/, '').trim();
-
-        if (name) {
-            return { name, contact };
-        }
-    }
-
-    return null;
-}
-
 async function finalizeLeadCapture() {
     leadStep.value = 'done';
     loading.value = true;
@@ -408,44 +380,58 @@ async function handleLeadStep(text: string): Promise<boolean> {
         return true;
     }
 
-    if (leadStep.value === 'ask_name') {
-        const identity = extractLeadIdentity(text);
+    const res = await fetch(`${props.apiBase}/api/v1/leads/process`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({
+            client_code: props.clientCode,
+            step: leadStep.value,
+            message: text,
+            lead_data: {
+                name: leadData.value.name,
+                contact: leadData.value.contact,
+            },
+        }),
+    });
 
-        if (identity) {
-            leadData.value.name = identity.name;
-            leadData.value.contact = identity.contact;
-            addBotMessage(
-                `Thanks ${leadData.value.name}. We've got your contact details.`,
-                true,
-            );
-            await finalizeLeadCapture();
-            return true;
+    const data = await res.json();
+
+    if (!res.ok) {
+        addBotMessage(
+            'Sorry, I had trouble processing that. Please try again.',
+            true,
+        );
+        return true;
+    }
+
+    leadData.value.name = data.name ?? leadData.value.name;
+    leadData.value.contact = data.contact ?? leadData.value.contact;
+
+    if (data.cancel_capture) {
+        leadStep.value = null;
+        addBotMessage(
+            data.assistant_message || 'No problem at all. Feel free to keep chatting if you need anything else.',
+            true,
+        );
+        return true;
+    }
+
+    if (data.next_step === 'done') {
+        if (data.assistant_message) {
+            addBotMessage(data.assistant_message, true);
         }
-
-        leadData.value.name = text;
-        leadStep.value = 'ask_contact';
-        addBotMessage(
-            `Thanks ${leadData.value.name}. What is the best phone number or email to reach you?`,
-            true,
-        );
-        return true;
-    }
-
-    if (leadStep.value === 'ask_contact') {
-        leadData.value.contact = text;
-        leadStep.value = 'ask_notes';
-        addBotMessage(
-            'Got it. Please briefly describe what you need help with.',
-            true,
-        );
-        return true;
-    }
-
-    if (leadStep.value === 'ask_notes') {
-        leadData.value.notes = text;
         await finalizeLeadCapture();
         return true;
     }
+
+    leadStep.value = data.next_step ?? leadStep.value;
+    addBotMessage(
+        data.assistant_message || 'Could you share that one more time?',
+        true,
+    );
 
     return false;
 }
@@ -532,7 +518,7 @@ async function send() {
 
                 setTimeout(() => {
                     addBotMessage(
-                        leadCaptureIntroMessage.value,
+                        data.lead_capture_prompt || leadCaptureIntroMessage.value,
                         true,
                     );
                 }, 600);

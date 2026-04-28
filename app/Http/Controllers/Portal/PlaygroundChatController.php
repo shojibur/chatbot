@@ -11,6 +11,7 @@ use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\IntentDetectionService;
+use App\Services\LeadCaptureService;
 use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,7 @@ class PlaygroundChatController extends Controller
         private readonly ConversationCacheService $cacheService,
         private readonly ChatHistoryService $chatHistoryService,
         private readonly IntentDetectionService $intentService,
+        private readonly LeadCaptureService $leadCaptureService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
         private readonly AiClientFactory $aiClientFactory,
         private readonly AiModelCatalog $modelCatalog,
@@ -124,11 +126,16 @@ class PlaygroundChatController extends Controller
                     ? $this->intentService->detectLeadCapture($message, $cachedAnswer)
                     : ['capture' => false, 'trigger' => null];
 
+                $leadPrompt = $leadDecision['capture']
+                    ? $this->leadCaptureService->initialPrompt($client, $message, $cachedAnswer)
+                    : null;
+
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
                     'lead_capture' => $leadDecision['capture'],
                     'lead_trigger' => $leadDecision['trigger'],
+                    'lead_capture_prompt' => $leadPrompt,
                 ]);
             }
         }
@@ -208,6 +215,10 @@ class PlaygroundChatController extends Controller
             ? $this->intentService->detectLeadCapture($message, $cleanAnswer)
             : ['capture' => false, 'trigger' => null];
 
+        $leadPrompt = $leadDecision['capture']
+            ? $this->leadCaptureService->initialPrompt($client, $message, $cleanAnswer)
+            : null;
+
         return response()->json([
             'answer' => $cleanAnswer,
             'cached' => false,
@@ -216,6 +227,7 @@ class PlaygroundChatController extends Controller
             'response_time_ms' => null, // computed client-side
             'lead_capture' => $leadDecision['capture'],
             'lead_trigger' => $leadDecision['trigger'],
+            'lead_capture_prompt' => $leadPrompt,
         ]);
     }
 

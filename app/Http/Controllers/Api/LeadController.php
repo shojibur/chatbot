@@ -7,12 +7,17 @@ use App\Mail\NewLeadCaptured;
 use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\Lead;
+use App\Services\LeadCaptureService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 
 class LeadController extends Controller
 {
+    public function __construct(
+        private readonly LeadCaptureService $leadCaptureService,
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -64,5 +69,30 @@ class LeadController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    public function process(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'client_code' => 'required|string',
+            'step' => 'required|in:ask_name,ask_contact',
+            'message' => 'required|string|max:1000',
+            'lead_data' => 'nullable|array',
+            'lead_data.name' => 'nullable|string|max:255',
+            'lead_data.contact' => 'nullable|string|max:255',
+        ]);
+
+        $client = Client::where('unique_code', $data['client_code'])
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        $result = $this->leadCaptureService->processStep(
+            $client,
+            $data['step'],
+            $data['message'],
+            $data['lead_data'] ?? [],
+        );
+
+        return response()->json($result);
     }
 }

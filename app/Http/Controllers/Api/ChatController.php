@@ -12,6 +12,7 @@ use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\IntentDetectionService;
+use App\Services\LeadCaptureService;
 use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ class ChatController extends Controller
         private readonly ConversationCacheService $cacheService,
         private readonly ChatHistoryService $chatHistoryService,
         private readonly IntentDetectionService $intentService,
+        private readonly LeadCaptureService $leadCaptureService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
         private readonly AiClientFactory $aiClientFactory,
         private readonly AiModelCatalog $modelCatalog,
@@ -124,12 +126,17 @@ class ChatController extends Controller
                     ? $this->intentService->detectLeadCapture($message, $cachedAnswer)
                     : ['capture' => false, 'trigger' => null];
 
+                $leadPrompt = $leadDecision['capture']
+                    ? $this->leadCaptureService->initialPrompt($client, $message, $cachedAnswer)
+                    : null;
+
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
                     'session_token' => $chatSession->session_token,
                     'lead_capture' => $leadDecision['capture'],
                     'lead_trigger' => $leadDecision['trigger'],
+                    'lead_capture_prompt' => $leadPrompt,
                 ]);
             }
         }
@@ -230,12 +237,17 @@ class ChatController extends Controller
             ? $this->intentService->detectLeadCapture($message, $answer)
             : ['capture' => false, 'trigger' => null];
 
+        $leadPrompt = $leadDecision['capture']
+            ? $this->leadCaptureService->initialPrompt($client, $message, $answer)
+            : null;
+
         return response()->json([
             'answer' => $answer,
             'cached' => false,
             'session_token' => $chatSession->session_token,
             'lead_capture' => $leadDecision['capture'],
             'lead_trigger' => $leadDecision['trigger'],
+            'lead_capture_prompt' => $leadPrompt,
         ]);
     }
 

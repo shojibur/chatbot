@@ -16,4 +16,8 @@ Route::prefix('v1')->group(function () {
     Route::post('leads', [ApiLeadController::class, 'store'])
         ->middleware('throttle:30,1')
         ->name('api.leads.store');
+
+    Route::post('leads/process', [ApiLeadController::class, 'process'])
+        ->middleware('throttle:30,1')
+        ->name('api.leads.process');
 });
