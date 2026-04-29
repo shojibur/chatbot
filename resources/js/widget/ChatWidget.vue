@@ -625,6 +625,26 @@ async function send() {
 
         const data = await res.json();
 
+        if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
+            if (data.session_token) {
+                sessionToken.value = data.session_token;
+                sessionStorage.setItem('davey_session_token', data.session_token);
+            }
+
+            leadData.value.triggerMessage = text;
+            leadData.value.trigger = data.lead_trigger ?? 'ai';
+            leadStep.value = 'ask_name';
+
+            setTimeout(() => {
+                addBotMessage(
+                    data.lead_capture_prompt || leadCaptureIntroMessage.value,
+                    true,
+                );
+            }, 600);
+
+            return;
+        }
+
         if (res.ok) {
             if (data.answer) {
                 messages.value.push({ role: 'assistant', content: data.answer });
@@ -637,19 +657,6 @@ async function send() {
                 sessionStorage.setItem('davey_session_token', data.session_token);
             }
 
-            // Trigger lead capture flow if backend signals it (only once per session)
-            if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
-                leadData.value.triggerMessage = text;
-                leadData.value.trigger = data.lead_trigger ?? 'ai';
-                leadStep.value = 'ask_name';
-
-                setTimeout(() => {
-                    addBotMessage(
-                        data.lead_capture_prompt || leadCaptureIntroMessage.value,
-                        true,
-                    );
-                }, 600);
-            }
         } else {
             messages.value.push({
                 role: 'assistant',

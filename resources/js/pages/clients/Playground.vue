@@ -307,6 +307,27 @@ async function send() {
         const data = await res.json();
         const elapsed = Math.round(performance.now() - startTime);
 
+        if (
+            data.lead_capture &&
+            !leadStep.value &&
+            !leadCapturedThisSession.value
+        ) {
+            leadData.value.triggerMessage = text;
+            leadData.value.trigger = data.lead_trigger ?? 'ai';
+            leadStep.value = 'ask_name';
+
+            setTimeout(() => {
+                messages.value.push({
+                    role: 'assistant',
+                    content: data.lead_capture_prompt || leadCaptureIntroMessage.value,
+                    timestamp: new Date(),
+                });
+                scrollToBottom();
+            }, 600);
+
+            return;
+        }
+
         if (res.ok) {
             if (data.cached) {
                 cacheHits.value++;
@@ -329,24 +350,6 @@ async function send() {
                 });
             }
 
-            if (
-                data.lead_capture &&
-                !leadStep.value &&
-                !leadCapturedThisSession.value
-            ) {
-                leadData.value.triggerMessage = text;
-                leadData.value.trigger = data.lead_trigger ?? 'ai';
-                leadStep.value = 'ask_name';
-
-                setTimeout(() => {
-                    messages.value.push({
-                        role: 'assistant',
-                        content: data.lead_capture_prompt || leadCaptureIntroMessage.value,
-                        timestamp: new Date(),
-                    });
-                    scrollToBottom();
-                }, 600);
-            }
         } else {
             messages.value.push({
                 role: 'assistant',
