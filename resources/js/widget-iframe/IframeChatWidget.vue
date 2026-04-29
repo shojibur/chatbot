@@ -21,17 +21,11 @@
                 <div
                     v-for="(msg, i) in messages"
                     :key="i"
-                    :class="['davey-iframe-msg', `davey-iframe-msg-${msg.role}`, msg.isLead ? 'davey-iframe-msg-lead' : '']"
+                    :class="['davey-iframe-msg', `davey-iframe-msg-${msg.role}`]"
                 >
                     <div
                         class="davey-iframe-msg-bubble"
-                        :style="
-                            msg.role === 'assistant'
-                                ? msg.isLead
-                                    ? leadMessageStyle
-                                    : {}
-                                : { background: accentColor, color: '#fff' }
-                        "
+                        :style="msg.role === 'assistant' ? {} : { background: accentColor, color: '#fff' }"
                     >
                         <div
                             v-if="msg.role === 'assistant'"
@@ -57,13 +51,13 @@
                     type="text"
                     class="davey-iframe-input"
                     :placeholder="inputPlaceholder"
-                    :disabled="loading || leadStep === 'done'"
+                    :disabled="loading"
                     @keydown.enter="send"
                 />
                 <button
                     class="davey-iframe-send"
                     :style="{ background: primaryColor }"
-                    :disabled="!input.trim() || loading || leadStep === 'done'"
+                    :disabled="!input.trim() || loading"
                     @click="send"
                 >
                     <svg
@@ -118,10 +112,7 @@ interface WidgetConfig {
 interface Message {
     role: 'user' | 'assistant';
     content: string;
-    isLead?: boolean;
 }
-
-type LeadStep = null | 'ask_name' | 'ask_contact' | 'done';
 
 const props = defineProps<{
     clientCode: string;
@@ -133,29 +124,15 @@ const props = defineProps<{
 const input = ref('');
 const loading = ref(false);
 const messagesEl = ref<HTMLElement | null>(null);
-const leadStep = ref<LeadStep>(null);
-const leadData = ref({
-    name: '',
-    contact: '',
-    notes: '',
-    triggerMessage: '',
-    trigger: 'ai',
-});
 const isDarkMode = ref(false);
 let darkModeMedia: MediaQueryList | null = null;
 
 const storagePrefix = `davey_iframe_${props.clientCode}`;
 const messagesStorageKey = `${storagePrefix}_messages`;
 const sessionStorageKey = `${storagePrefix}_session_token`;
-const leadCapturedStorageKey = `${storagePrefix}_lead_captured`;
 
 const messages = ref<Message[]>(readMessages());
 const sessionToken = ref<string | null>(readStorage(sessionStorageKey));
-const leadCapturedThisSession = ref(
-    readStorage(leadCapturedStorageKey) === 'true',
-);
-const defaultLeadCaptureIntroMessage =
-    'I can help with that! May I get your **name** first so our team can follow up with you?';
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#1f2937',
@@ -175,30 +152,7 @@ const themeMode = computed<'system' | 'light' | 'dark'>(() => {
 
     return mode === 'dark' || mode === 'light' ? mode : 'system';
 });
-const leadCaptureIntroMessage = computed(
-    () => props.config.widget_settings?.lead_capture_intro_message || defaultLeadCaptureIntroMessage,
-);
-const leadMessageStyle = computed(() =>
-    isDarkMode.value
-        ? {
-            background:
-                'linear-gradient(135deg, rgba(30,41,59,0.98) 0%, rgba(15,23,42,0.98) 100%)',
-            border: '1px solid #334155',
-            color: '#f8fafc',
-        }
-        : {
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            color: '#1e3a8a',
-        },
-);
-
-const inputPlaceholder = computed(() => {
-    if (leadStep.value === 'ask_name') return 'Enter your name...';
-    if (leadStep.value === 'ask_contact') return 'Phone number or email...';
-    if (leadStep.value === 'done') return 'Thank you';
-    return 'Type a message...';
-});
+const inputPlaceholder = computed(() => 'Type a message...');
 
 onMounted(() => {
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
@@ -302,166 +256,10 @@ function syncDarkModePreference() {
     isDarkMode.value = !!darkModeMedia?.matches;
 }
 
-function addBotMessage(content: string, isLead = false) {
-    messages.value.push({ role: 'assistant', content, isLead });
+function addBotMessage(content: string) {
+    messages.value.push({ role: 'assistant', content });
     saveMessages();
     scrollToBottom();
-}
-
-function userIsRefusing(text: string): boolean {
-    const lower = text.toLowerCase().trim();
-    const refusalPatterns = [
-        'no', 'nah', 'nope', 'not', "don't", 'dont', 'do not',
-        'i refuse', 'skip', 'pass', 'never mind', 'nevermind',
-        'forget it', 'stop', 'cancel', "i'd rather not", 'i rather not',
-        'no thanks', 'not interested', 'leave me alone',
-        'i do not want', 'i dont want', 'prefer not', 'rather not', 'not now',
-    ];
-    return refusalPatterns.some((p) => lower.includes(p));
-}
-
-function cancelLeadCapture() {
-    leadStep.value = null;
-    leadData.value = {
-        name: '',
-        contact: '',
-        notes: '',
-        triggerMessage: '',
-        trigger: 'ai',
-    };
-    addBotMessage(
-        'No problem. You can continue chatting, and I can still help here.',
-        true,
-    );
-}
-
-async function finalizeLeadCapture() {
-    leadStep.value = 'done';
-    loading.value = true;
-    scrollToBottom();
-
-    try {
-        await saveLead();
-        leadCapturedThisSession.value = true;
-        writeStorage(leadCapturedStorageKey, 'true');
-        addBotMessage(
-            'Thank you. Our team will contact you soon.',
-            true,
-        );
-    } catch {
-        addBotMessage(
-            'There was a problem saving your details. Please try again shortly.',
-            true,
-        );
-    } finally {
-        loading.value = false;
-        setTimeout(() => {
-            leadStep.value = null;
-            leadData.value = {
-                name: '',
-                contact: '',
-                notes: '',
-                triggerMessage: '',
-                trigger: 'ai',
-            };
-        }, 4000);
-    }
-}
-
-async function handleLeadStep(text: string): Promise<boolean> {
-    if (!leadStep.value || leadStep.value === 'done') return false;
-
-    messages.value.push({ role: 'user', content: text });
-    saveMessages();
-    scrollToBottom();
-
-    if (userIsRefusing(text)) {
-        cancelLeadCapture();
-        return true;
-    }
-
-    const res = await fetch(`${props.apiBase}/api/v1/leads/process`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify({
-            client_code: props.clientCode,
-            step: leadStep.value,
-            message: text,
-            lead_data: {
-                name: leadData.value.name,
-                contact: leadData.value.contact,
-            },
-        }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-        addBotMessage(
-            'Sorry, I had trouble processing that. Please try again.',
-            true,
-        );
-        return true;
-    }
-
-    leadData.value.name = data.name ?? leadData.value.name;
-    leadData.value.contact = data.contact ?? leadData.value.contact;
-
-    if (data.cancel_capture) {
-        leadStep.value = null;
-        addBotMessage(
-            data.assistant_message || 'No problem at all. Feel free to keep chatting if you need anything else.',
-            true,
-        );
-        return true;
-    }
-
-    if (data.next_step === 'done') {
-        if (data.assistant_message) {
-            addBotMessage(data.assistant_message, true);
-        }
-        await finalizeLeadCapture();
-        return true;
-    }
-
-    leadStep.value = data.next_step ?? leadStep.value;
-    addBotMessage(
-        data.assistant_message || 'Could you share that one more time?',
-        true,
-    );
-
-    return false;
-}
-
-async function saveLead() {
-    const body: Record<string, string> = {
-        client_code: props.clientCode,
-        name: leadData.value.name,
-        contact: leadData.value.contact,
-        user_request: leadData.value.triggerMessage,
-        notes: leadData.value.notes,
-        trigger: leadData.value.trigger,
-    };
-
-    if (sessionToken.value) {
-        body.session_token = sessionToken.value;
-    }
-
-    const res = await fetch(`${props.apiBase}/api/v1/leads`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-        throw new Error('Lead save failed');
-    }
 }
 
 async function send() {
@@ -469,11 +267,6 @@ async function send() {
     if (!text || loading.value) return;
 
     input.value = '';
-
-    if (leadStep.value && leadStep.value !== 'done') {
-        await handleLeadStep(text);
-        return;
-    }
 
     messages.value.push({ role: 'user', content: text });
     saveMessages();
@@ -501,26 +294,6 @@ async function send() {
         });
 
         const data = await res.json();
-
-        if (data.lead_capture && !leadStep.value && !leadCapturedThisSession.value) {
-            if (data.session_token) {
-                sessionToken.value = data.session_token;
-                writeStorage(sessionStorageKey, data.session_token);
-            }
-
-            leadData.value.triggerMessage = text;
-            leadData.value.trigger = data.lead_trigger ?? 'ai';
-            leadStep.value = 'ask_name';
-
-            setTimeout(() => {
-                addBotMessage(
-                    data.lead_capture_prompt || leadCaptureIntroMessage.value,
-                    true,
-                );
-            }, 600);
-
-            return;
-        }
 
         if (res.ok) {
             if (data.answer) {

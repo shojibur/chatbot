@@ -55,11 +55,6 @@ const primaryColor = computed(
 const accentColor = computed(
     () => props.client.widget_settings?.accent_color || '#8b5cf6',
 );
-const leadCaptureIntroMessage = computed(
-    () =>
-        props.client.widget_settings?.lead_capture_intro_message ||
-        'I can help with that! May I get your **name** first so our team can follow up with you?',
-);
 
 // Add welcome message on mount
 const welcomeMessage = props.client.widget_settings?.welcome_message;
@@ -72,197 +67,6 @@ if (welcomeMessage) {
     });
 }
 
-// Lead capture state
-type LeadStep = null | 'ask_name' | 'ask_contact' | 'done';
-const leadStep = ref<LeadStep>(null);
-const leadCapturedThisSession = ref(false);
-const leadData = ref({
-    name: '',
-    contact: '',
-    notes: '',
-    triggerMessage: '',
-    trigger: 'ai',
-});
-
-function userIsRefusing(text: string): boolean {
-    const lower = text.toLowerCase().trim();
-    const refusalPatterns = [
-        'no',
-        'nah',
-        'nope',
-        'not',
-        "don't",
-        'dont',
-        'do not',
-        'i refuse',
-        'skip',
-        'pass',
-        'never mind',
-        'nevermind',
-        'forget it',
-        'stop',
-        'cancel',
-        "i'd rather not",
-        'i rather not',
-        'no thanks',
-        'no thank',
-        'not interested',
-        'leave me alone',
-        "i don't want",
-        'i do not want',
-        'i dont want',
-        'prefer not',
-        'rather not',
-        'not now',
-    ];
-
-    return refusalPatterns.some((pattern) => lower.includes(pattern));
-}
-
-function cancelLeadCapture(): void {
-    leadStep.value = null;
-    leadData.value = {
-        name: '',
-        contact: '',
-        notes: '',
-        triggerMessage: '',
-        trigger: 'ai',
-    };
-    messages.value.push({
-        role: 'assistant',
-        content: `No problem at all. Feel free to keep chatting and ask anything else.`,
-        timestamp: new Date(),
-    });
-    scrollToBottom();
-}
-
-async function finalizeLeadCapture(): Promise<void> {
-    leadStep.value = 'done';
-    loading.value = true;
-    scrollToBottom();
-
-    try {
-        await fetch(`${props.api_base_url}/api/v1/leads`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: JSON.stringify({
-                client_code: props.client.unique_code,
-                session_token: sessionId.value,
-                name: leadData.value.name,
-                contact: leadData.value.contact,
-                user_request: leadData.value.triggerMessage,
-                notes: leadData.value.notes,
-                trigger: leadData.value.trigger,
-            }),
-        });
-
-        leadCapturedThisSession.value = true;
-        messages.value.push({
-            role: 'assistant',
-            content: `✅ **Thank you!** Our team will contact you soon.`,
-            timestamp: new Date(),
-        });
-    } catch {
-        messages.value.push({
-            role: 'assistant',
-            content: `Sorry, there was a problem saving your details.`,
-            timestamp: new Date(),
-        });
-    } finally {
-        loading.value = false;
-        setTimeout(() => {
-            leadStep.value = null;
-            leadData.value = {
-                name: '',
-                contact: '',
-                notes: '',
-                triggerMessage: '',
-                trigger: 'ai',
-            };
-        }, 4000);
-    }
-}
-
-async function handleLeadStep(text: string): Promise<boolean> {
-    if (!leadStep.value || leadStep.value === 'done') {
-        return false;
-    }
-
-    // Add user response to chat
-    messages.value.push({ role: 'user', content: text, timestamp: new Date() });
-    scrollToBottom();
-
-    if (userIsRefusing(text)) {
-        cancelLeadCapture();
-        return true;
-    }
-
-    const res = await fetch(`${props.api_base_url}/api/v1/leads/process`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-        },
-        body: JSON.stringify({
-            client_code: props.client.unique_code,
-            step: leadStep.value,
-            message: text,
-            lead_data: {
-                name: leadData.value.name,
-                contact: leadData.value.contact,
-            },
-        }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-        messages.value.push({
-            role: 'assistant',
-            content: 'Sorry, I had trouble processing that. Please try again.',
-            timestamp: new Date(),
-        });
-        return true;
-    }
-
-    leadData.value.name = data.name ?? leadData.value.name;
-    leadData.value.contact = data.contact ?? leadData.value.contact;
-
-    if (data.cancel_capture) {
-        leadStep.value = null;
-        messages.value.push({
-            role: 'assistant',
-            content: data.assistant_message || 'No problem at all. Feel free to keep chatting if you need anything else.',
-            timestamp: new Date(),
-        });
-        return true;
-    }
-
-    if (data.next_step === 'done') {
-        if (data.assistant_message) {
-            messages.value.push({
-                role: 'assistant',
-                content: data.assistant_message,
-                timestamp: new Date(),
-            });
-        }
-        await finalizeLeadCapture();
-        return true;
-    }
-
-    leadStep.value = data.next_step ?? leadStep.value;
-    messages.value.push({
-        role: 'assistant',
-        content: data.assistant_message || 'Could you share that one more time?',
-        timestamp: new Date(),
-    });
-
-    return false;
-}
-
 async function send() {
     const text = input.value.trim();
 
@@ -271,12 +75,6 @@ async function send() {
     }
 
     input.value = '';
-
-    if (leadStep.value && leadStep.value !== 'done') {
-        await handleLeadStep(text);
-
-        return;
-    }
 
     messages.value.push({
         role: 'user',
@@ -306,27 +104,6 @@ async function send() {
 
         const data = await res.json();
         const elapsed = Math.round(performance.now() - startTime);
-
-        if (
-            data.lead_capture &&
-            !leadStep.value &&
-            !leadCapturedThisSession.value
-        ) {
-            leadData.value.triggerMessage = text;
-            leadData.value.trigger = data.lead_trigger ?? 'ai';
-            leadStep.value = 'ask_name';
-
-            setTimeout(() => {
-                messages.value.push({
-                    role: 'assistant',
-                    content: data.lead_capture_prompt || leadCaptureIntroMessage.value,
-                    timestamp: new Date(),
-                });
-                scrollToBottom();
-            }, 600);
-
-            return;
-        }
 
         if (res.ok) {
             if (data.cached) {
@@ -394,8 +171,6 @@ function clearChat() {
     totalCost.value = 0;
     requestCount.value = 0;
     cacheHits.value = 0;
-    leadStep.value = null;
-    leadCapturedThisSession.value = false;
 
     if (welcomeMessage) {
         messages.value.push({

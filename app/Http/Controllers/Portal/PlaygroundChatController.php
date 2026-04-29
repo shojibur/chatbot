@@ -10,7 +10,6 @@ use App\Services\AiClientFactory;
 use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
-use App\Services\IntentDetectionService;
 use App\Services\LeadCaptureService;
 use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
@@ -20,7 +19,7 @@ use Illuminate\Support\Str;
 
 class PlaygroundChatController extends Controller
 {
-    private const PROMPT_POLICY_VERSION = 'v2-general-fallback';
+    private const PROMPT_POLICY_VERSION = 'v3-ai-native-lead-capture';
 
     private const LEGACY_KB_ONLY_PROMPT = 'answer only from the approved knowledge base. if the answer is not in the knowledge base, say you do not know';
 
@@ -30,7 +29,6 @@ class PlaygroundChatController extends Controller
         private readonly RetrievalService $retrievalService,
         private readonly ConversationCacheService $cacheService,
         private readonly ChatHistoryService $chatHistoryService,
-        private readonly IntentDetectionService $intentService,
         private readonly LeadCaptureService $leadCaptureService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
         private readonly AiClientFactory $aiClientFactory,
@@ -99,37 +97,6 @@ class PlaygroundChatController extends Controller
         }
 
         $leadAlreadyCaptured = Lead::where('chat_session_id', $chatSession->id)->exists();
-        $leadRoute = ! $leadAlreadyCaptured
-            ? $this->intentService->detectLeadRoute($message, $recentHistory)
-            : ['capture' => false, 'trigger' => null, 'route' => 'normal_answer', 'reason' => null];
-
-        if ($leadRoute['capture']) {
-            $leadPrompt = $this->leadCaptureService->initialPrompt($client, $message, '');
-            $this->chatHistoryService->logAssistantMessage(
-                $chatSession,
-                $leadPrompt,
-                0,
-                false,
-                [
-                    'lead_capture' => true,
-                    'lead_trigger' => $leadRoute['trigger'],
-                    'lead_route' => $leadRoute['route'],
-                    'lead_reason' => $leadRoute['reason'],
-                    'source' => 'playground_pre_answer_router',
-                ]
-            );
-
-            return response()->json([
-                'answer' => null,
-                'cached' => false,
-                'chunks_used' => 0,
-                'tokens_used' => 0,
-                'response_time_ms' => null,
-                'lead_capture' => true,
-                'lead_trigger' => $leadRoute['trigger'],
-                'lead_capture_prompt' => $leadPrompt,
-            ]);
-        }
 
         // Semantic cache
         if ($client->semantic_cache_enabled) {
@@ -137,7 +104,13 @@ class PlaygroundChatController extends Controller
 
             if ($cached) {
                 $this->cacheService->markHit($cached, $cached->prompt_tokens_saved, $cached->completion_tokens_saved);
-                $cachedAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $cached->answer));
+                $cachedAnswer = $cached->answer;
+                $cachedLeadPayload = $this->leadCaptureService->extractCompletedLeadFromAnswer($cachedAnswer);
+                if ($cachedLeadPayload !== null) {
+                    $cachedAnswer = $cachedLeadPayload['visible_answer'];
+                }
+
+                $cachedAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $cachedAnswer));
                 $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
 
                 UsageLog::create([
@@ -220,7 +193,23 @@ class PlaygroundChatController extends Controller
             ],
         ]);
 
-        if ($client->semantic_cache_enabled) {
+        $leadPayload = ! $leadAlreadyCaptured
+            ? $this->leadCaptureService->extractCompletedLeadFromAnswer($answer)
+            : null;
+
+        if ($leadPayload !== null) {
+            $cleanAnswer = $leadPayload['visible_answer'];
+            $this->leadCaptureService->saveAiLead(
+                $client,
+                $chatSession,
+                $leadPayload,
+                $message,
+            );
+        } else {
+            $cleanAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $answer));
+        }
+
+        if ($client->semantic_cache_enabled && $leadPayload === null) {
             $this->cacheService->remember(
                 $client, $message, $answer,
                 mb_substr($context, 0, 500),
@@ -231,7 +220,6 @@ class PlaygroundChatController extends Controller
             );
         }
 
-        $cleanAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $answer));
         $this->chatHistoryService->logAssistantMessage($chatSession, $cleanAnswer, $totalTokens);
 
         return response()->json([
@@ -243,6 +231,7 @@ class PlaygroundChatController extends Controller
             'lead_capture' => false,
             'lead_trigger' => null,
             'lead_capture_prompt' => null,
+            'lead_saved' => $leadPayload !== null,
         ]);
     }
 
@@ -266,10 +255,10 @@ class PlaygroundChatController extends Controller
             : '';
 
         if ($context === '') {
-            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$clientName." specific facts that are not in the knowledge base.\n- Do not send the user to a contact page or contact form.\n- If the user wants human follow-up, tell them you can collect their details here for the team to reach out.";
+            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$clientName." specific facts that are not in the knowledge base.\n- Do not send the user to a contact page or contact form.\n- You are also a lead qualification agent. Collect the visitor's name, phone, email, and a brief description of their needs naturally in conversation.\n- If the visitor gives messy contact details, understand and normalize them conversationally.\n- Once you have the visitor's name and at least one valid contact method, include this exact JSON object at the END of your response and nowhere else:\n{\"lead_status\":\"complete\",\"lead_data\":{\"name\":\"...\",\"phone\":\"...\",\"email\":\"...\",\"needs\":\"...\"}}\n- Keep the conversational user-facing message before the JSON.\n- When complete, tell the visitor you have their info and the team will reach out shortly.";
         }
 
-        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$clientName."'s approved knowledge base.\n- Use this context as the primary source for ".$clientName."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$clientName."-specific facts that are not present in the context.\n- Do not send the user to a contact page or contact form.\n- If the user wants human follow-up, tell them you can collect their details here for the team to reach out.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
+        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$clientName."'s approved knowledge base.\n- Use this context as the primary source for ".$clientName."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$clientName."-specific facts that are not present in the context.\n- Do not send the user to a contact page or contact form.\n- You are also a lead qualification agent. Collect the visitor's name, phone, email, and a brief description of their needs naturally in conversation.\n- If the visitor gives messy contact details, understand and normalize them conversationally.\n- Once you have the visitor's name and at least one valid contact method, include this exact JSON object at the END of your response and nowhere else:\n{\"lead_status\":\"complete\",\"lead_data\":{\"name\":\"...\",\"phone\":\"...\",\"email\":\"...\",\"needs\":\"...\"}}\n- Keep the conversational user-facing message before the JSON.\n- When complete, tell the visitor you have their info and the team will reach out shortly.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
     }
 
     private function promptHashSeed(Client $client): string

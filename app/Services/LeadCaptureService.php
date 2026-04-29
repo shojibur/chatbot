@@ -2,7 +2,13 @@
 
 namespace App\Services;
 
+use App\Mail\NewLeadCaptured;
+use App\Models\ChatSession;
 use App\Models\Client;
+use App\Models\Lead;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class LeadCaptureService
 {
@@ -65,6 +71,97 @@ PROMPT;
         } catch (\Throwable) {
             return $fallback;
         }
+    }
+
+    /**
+     * @return array{
+     *     name: string,
+     *     phone: string,
+     *     email: string,
+     *     needs: string,
+     *     visible_answer: string
+     * }|null
+     */
+    public function extractCompletedLeadFromAnswer(string $answer): ?array
+    {
+        $matchedJson = $this->extractTrailingLeadJson($answer);
+
+        if ($matchedJson === null) {
+            return null;
+        }
+
+        $decoded = $this->decodeJsonObject($matchedJson);
+        $status = trim((string) ($decoded['lead_status'] ?? ''));
+        $leadData = is_array($decoded['lead_data'] ?? null) ? $decoded['lead_data'] : [];
+        $name = trim((string) ($leadData['name'] ?? ''));
+        $phone = trim((string) ($leadData['phone'] ?? ''));
+        $email = trim((string) ($leadData['email'] ?? ''));
+        $needs = trim((string) ($leadData['needs'] ?? ''));
+
+        if ($status !== 'complete' || $name === '' || ($phone === '' && $email === '')) {
+            return null;
+        }
+
+        $visibleAnswer = trim(substr($answer, 0, -strlen($matchedJson)));
+        $visibleAnswer = trim(preg_replace("/\n{3,}/", "\n\n", $visibleAnswer) ?? $visibleAnswer);
+
+        return [
+            'name' => $name,
+            'phone' => $phone,
+            'email' => $email,
+            'needs' => $needs,
+            'visible_answer' => $visibleAnswer,
+        ];
+    }
+
+    /**
+     * @param  array{name: string, phone: string, email: string, needs: string}  $leadData
+     */
+    public function saveAiLead(
+        Client $client,
+        ?ChatSession $session,
+        array $leadData,
+        string $userRequest,
+    ): Lead {
+        $snapshot = $session
+            ? $session->messages()
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get(['role', 'content'])
+                ->reverse()
+                ->values()
+                ->toArray()
+            : [];
+
+        $contact = $this->buildContactValue($leadData['phone'], $leadData['email']);
+        $notes = $this->buildNotesValue($leadData['phone'], $leadData['email'], $leadData['needs']);
+
+        $lead = Lead::create([
+            'client_id' => $client->id,
+            'chat_session_id' => $session?->id,
+            'name' => $leadData['name'],
+            'contact' => $contact,
+            'user_request' => $userRequest !== '' ? $userRequest : null,
+            'notes' => $notes !== '' ? $notes : null,
+            'conversation_snapshot' => $snapshot,
+            'trigger' => 'ai',
+        ]);
+
+        if ($client->contact_email) {
+            try {
+                Mail::to($client->contact_email)
+                    ->queue(new NewLeadCaptured($lead->load('client')));
+            } catch (Throwable $e) {
+                Log::warning('AI lead saved but notification failed to queue.', [
+                    'lead_id' => $lead->id,
+                    'client_id' => $client->id,
+                    'contact_email' => $client->contact_email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $lead;
     }
 
     /**
@@ -239,6 +336,17 @@ PROMPT;
         throw new \RuntimeException('Lead capture AI did not return valid JSON.');
     }
 
+    private function extractTrailingLeadJson(string $answer): ?string
+    {
+        $trimmed = trim($answer);
+
+        if (preg_match('/(\{[\s\S]*"lead_status"\s*:\s*"complete"[\s\S]*\})\s*$/', $trimmed, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
     private function resolveNextStep(string $name, string $contact): string
     {
         if ($name !== '' && $contact !== '') {
@@ -360,5 +468,33 @@ PROMPT;
         }
 
         return false;
+    }
+
+    private function buildContactValue(string $phone, string $email): string
+    {
+        if ($phone !== '' && $email !== '') {
+            return $email.' | '.$phone;
+        }
+
+        return $email !== '' ? $email : $phone;
+    }
+
+    private function buildNotesValue(string $phone, string $email, string $needs): string
+    {
+        $parts = [];
+
+        if ($email !== '') {
+            $parts[] = 'Email: '.$email;
+        }
+
+        if ($phone !== '') {
+            $parts[] = 'Phone: '.$phone;
+        }
+
+        if ($needs !== '') {
+            $parts[] = 'Needs: '.$needs;
+        }
+
+        return implode("\n", $parts);
     }
 }
