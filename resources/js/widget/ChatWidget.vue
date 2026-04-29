@@ -625,9 +625,11 @@ async function send() {
 
         const data = await res.json();
 
-        if (res.ok && data.answer) {
-            messages.value.push({ role: 'assistant', content: data.answer });
-            saveMessages();
+        if (res.ok) {
+            if (data.answer) {
+                messages.value.push({ role: 'assistant', content: data.answer });
+                saveMessages();
+            }
 
             // Store session token
             if (data.session_token) {

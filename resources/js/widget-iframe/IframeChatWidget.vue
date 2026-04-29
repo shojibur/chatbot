@@ -502,9 +502,11 @@ async function send() {
 
         const data = await res.json();
 
-        if (res.ok && data.answer) {
-            messages.value.push({ role: 'assistant', content: data.answer });
-            saveMessages();
+        if (res.ok) {
+            if (data.answer) {
+                messages.value.push({ role: 'assistant', content: data.answer });
+                saveMessages();
+            }
 
             if (data.session_token) {
                 sessionToken.value = data.session_token;

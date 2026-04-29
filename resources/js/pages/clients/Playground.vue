@@ -307,25 +307,27 @@ async function send() {
         const data = await res.json();
         const elapsed = Math.round(performance.now() - startTime);
 
-        if (res.ok && data.answer) {
+        if (res.ok) {
             if (data.cached) {
                 cacheHits.value++;
             }
 
-            // If the live widget detects lead_capture, it waits 600ms gracefully and intercepts.
-            // Let's do the exact same thing here.
-            messages.value.push({
-                role: 'assistant',
-                content: data.answer,
-                cached: data.cached ?? false,
-                timestamp: new Date(),
-                debug: {
-                    response_time_ms: elapsed,
+            if (data.answer) {
+                // If the live widget detects lead_capture, it waits 600ms gracefully and intercepts.
+                // Let's do the exact same thing here.
+                messages.value.push({
+                    role: 'assistant',
+                    content: data.answer,
                     cached: data.cached ?? false,
-                    status: res.status,
-                    lead_capture: data.lead_capture ?? false,
-                },
-            });
+                    timestamp: new Date(),
+                    debug: {
+                        response_time_ms: elapsed,
+                        cached: data.cached ?? false,
+                        status: res.status,
+                        lead_capture: data.lead_capture ?? false,
+                    },
+                });
+            }
 
             if (
                 data.lead_capture &&

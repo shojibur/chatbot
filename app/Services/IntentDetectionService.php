@@ -25,45 +25,53 @@ class IntentDetectionService
     ) {}
 
     /**
-     * Decide whether lead capture should trigger, preferring the AI classifier.
+     * Route the conversation before generating a normal bot answer.
      *
-     * Returns a structured decision so callers can persist the trigger source.
-     *
-     * @return array{capture: bool, trigger: string|null}
+     * @param  list<array{role?: string, content?: string}>  $recentHistory
+     * @return array{capture: bool, trigger: string|null, route: string, reason: string|null}
      */
-    public function detectLeadCapture(string $userMessage, string $botAnswer): array
+    public function detectLeadRoute(string $userMessage, array $recentHistory = []): array
     {
         if ($this->hasExplicitHumanContactIntent($userMessage)) {
             return [
                 'capture' => true,
                 'trigger' => 'intent',
+                'route' => 'lead_capture_now',
+                'reason' => 'explicit_human_contact',
             ];
         }
 
+        $history = $this->formatHistory($recentHistory);
         $prompt = <<<PROMPT
-You are a lead-capture classifier for a business chatbot. Given the visitor's message and the bot's reply, decide if this visitor is ready to be contacted by the business.
+You are a lead-routing classifier for a business chatbot.
 
-Return ONLY "yes" or "no".
+Decide whether this message should immediately start lead capture before the normal assistant answer is generated.
 
-ALWAYS return "yes" if the visitor explicitly asks to speak to a human, talk to someone, be contacted, get a callback, or be connected to a real person — regardless of how the bot replied. These visitors want human contact and their info should be captured.
+Return JSON only in this exact shape:
+{"route":"normal_answer","reason":""}
 
-Otherwise, the MOST important rule: if the bot gave a helpful, complete answer — return "no". Lead capture is for when the visitor needs human help that the bot cannot provide.
+Valid route values:
+- "lead_capture_now"
+- "normal_answer"
 
-Return "yes" if ANY of these are true:
-1. The visitor explicitly requests human contact (talk to someone, speak to a person, call me, contact me, connect me to a human, etc.)
-2. The visitor has clear intent to transact (pricing, buying, booking, hiring) AND the bot could NOT fully help — it said it doesn't have the info, suggested contacting directly, gave a vague/incomplete answer, or couldn't provide what the visitor needs
+Choose "lead_capture_now" when ANY of these are true:
+- The visitor wants a human, callback, demo, quote, pricing follow-up, sales follow-up, or to leave their info
+- The visitor is clearly trying to buy, book, hire, sign up, get started, or speak with the team
+- The visitor asks how to contact the business, whether someone can reach out, or how to submit their details
+- The visitor asks something that a strong sales agent should convert into a lead instead of sending away
 
-Return "no" if:
-- The bot answered the question well AND the visitor did NOT ask for human contact
-- The visitor is asking general questions (what services, hours, location, team, etc.)
-- The visitor is browsing or learning
-- The visitor is making casual conversation (greetings, thanks, follow-ups)
-- The question is informational
+Choose "normal_answer" when the visitor is only browsing, asking informational questions, making casual conversation, or does not appear ready for contact or follow-up.
 
-Be CONSERVATIVE for transactional queries, but ALWAYS capture leads when the visitor wants to talk to a human.
+Important:
+- Bias toward lead_capture_now for business/contact/buying intent.
+- Do not wait for the assistant to tell the user to visit a contact page.
+- If uncertain between the two, prefer "lead_capture_now".
 
-VISITOR: {$userMessage}
-BOT REPLY: {$botAnswer}
+RECENT HISTORY:
+{$history}
+
+LATEST VISITOR MESSAGE:
+{$userMessage}
 PROMPT;
 
         try {
@@ -79,23 +87,91 @@ PROMPT;
                 ),
             ]);
 
-            $result = mb_strtolower(trim($response->choices[0]->message->content ?? ''));
+            $content = (string) ($response->choices[0]->message->content ?? '');
+            $decoded = $this->decodeJsonObject($content);
+            $route = (string) ($decoded['route'] ?? 'normal_answer');
+            $reason = trim((string) ($decoded['reason'] ?? ''));
 
             return [
-                'capture' => $result === 'yes',
-                'trigger' => $result === 'yes' ? 'ai' : null,
+                'capture' => $route === 'lead_capture_now',
+                'trigger' => $route === 'lead_capture_now' ? 'ai' : null,
+                'route' => $route === 'lead_capture_now' ? 'lead_capture_now' : 'normal_answer',
+                'reason' => $reason !== '' ? $reason : null,
             ];
         } catch (\Throwable) {
             return [
                 'capture' => false,
                 'trigger' => null,
+                'route' => 'normal_answer',
+                'reason' => null,
             ];
         }
     }
 
-    public function shouldCaptureLead(string $userMessage, string $botAnswer): bool
+    /**
+     * Backward-compatible wrapper.
+     *
+     * @param  list<array{role?: string, content?: string}>  $recentHistory
+     * @return array{capture: bool, trigger: string|null}
+     */
+    public function detectLeadCapture(string $userMessage, array $recentHistory = []): array
     {
-        return $this->detectLeadCapture($userMessage, $botAnswer)['capture'];
+        $route = $this->detectLeadRoute($userMessage, $recentHistory);
+
+        return [
+            'capture' => $route['capture'],
+            'trigger' => $route['trigger'],
+        ];
+    }
+
+    /**
+     * @param  list<array{role?: string, content?: string}>  $recentHistory
+     */
+    private function formatHistory(array $recentHistory): string
+    {
+        if ($recentHistory === []) {
+            return '- none';
+        }
+
+        $lines = [];
+
+        foreach ($recentHistory as $message) {
+            $role = (string) ($message['role'] ?? 'unknown');
+            $content = trim((string) ($message['content'] ?? ''));
+
+            if ($content === '') {
+                continue;
+            }
+
+            $lines[] = strtoupper($role).': '.$content;
+        }
+
+        return $lines === [] ? '- none' : implode("\n", $lines);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonObject(string $content): array
+    {
+        $trimmed = trim($content);
+        $trimmed = preg_replace('/^```json\s*|\s*```$/i', '', $trimmed) ?? $trimmed;
+
+        $decoded = json_decode($trimmed, true);
+
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        if (preg_match('/\{.*\}/s', $trimmed, $matches) === 1) {
+            $decoded = json_decode($matches[0], true);
+
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        throw new \RuntimeException('Lead router AI did not return valid JSON.');
     }
 
     private function hasExplicitHumanContactIntent(string $message): bool

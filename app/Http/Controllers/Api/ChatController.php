@@ -94,6 +94,35 @@ class ChatController extends Controller
 
         // If a lead was already captured for this session, never trigger again
         $leadAlreadyCaptured = Lead::where('chat_session_id', $chatSession->id)->exists();
+        $leadRoute = ! $leadAlreadyCaptured
+            ? $this->intentService->detectLeadRoute($message, $recentHistory)
+            : ['capture' => false, 'trigger' => null, 'route' => 'normal_answer', 'reason' => null];
+
+        if ($leadRoute['capture']) {
+            $leadPrompt = $this->leadCaptureService->initialPrompt($client, $message, '');
+            $this->chatHistoryService->logAssistantMessage(
+                $chatSession,
+                $leadPrompt,
+                0,
+                false,
+                [
+                    'lead_capture' => true,
+                    'lead_trigger' => $leadRoute['trigger'],
+                    'lead_route' => $leadRoute['route'],
+                    'lead_reason' => $leadRoute['reason'],
+                    'source' => 'pre_answer_router',
+                ]
+            );
+
+            return response()->json([
+                'answer' => null,
+                'cached' => false,
+                'session_token' => $chatSession->session_token,
+                'lead_capture' => true,
+                'lead_trigger' => $leadRoute['trigger'],
+                'lead_capture_prompt' => $leadPrompt,
+            ]);
+        }
 
         // Check cache first
         if ($client->semantic_cache_enabled) {
@@ -122,21 +151,13 @@ class ChatController extends Controller
 
                 $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
 
-                $leadDecision = ! $leadAlreadyCaptured
-                    ? $this->intentService->detectLeadCapture($message, $cachedAnswer)
-                    : ['capture' => false, 'trigger' => null];
-
-                $leadPrompt = $leadDecision['capture']
-                    ? $this->leadCaptureService->initialPrompt($client, $message, $cachedAnswer)
-                    : null;
-
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
                     'session_token' => $chatSession->session_token,
-                    'lead_capture' => $leadDecision['capture'],
-                    'lead_trigger' => $leadDecision['trigger'],
-                    'lead_capture_prompt' => $leadPrompt,
+                    'lead_capture' => false,
+                    'lead_trigger' => null,
+                    'lead_capture_prompt' => null,
                 ]);
             }
         }
@@ -232,22 +253,13 @@ class ChatController extends Controller
         // Log the assistant response to chat history (using the clean answer)
         $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
 
-        // AI-powered intent classification — analyses both question and answer
-        $leadDecision = ! $leadAlreadyCaptured
-            ? $this->intentService->detectLeadCapture($message, $answer)
-            : ['capture' => false, 'trigger' => null];
-
-        $leadPrompt = $leadDecision['capture']
-            ? $this->leadCaptureService->initialPrompt($client, $message, $answer)
-            : null;
-
         return response()->json([
             'answer' => $answer,
             'cached' => false,
             'session_token' => $chatSession->session_token,
-            'lead_capture' => $leadDecision['capture'],
-            'lead_trigger' => $leadDecision['trigger'],
-            'lead_capture_prompt' => $leadPrompt,
+            'lead_capture' => false,
+            'lead_trigger' => null,
+            'lead_capture_prompt' => null,
         ]);
     }
 
@@ -294,10 +306,10 @@ class ChatController extends Controller
             : '';
 
         if (! $context) {
-            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$client->name." specific facts that are not in the knowledge base.\n- If the user needs confirmed ".$client->name.' details, suggest contacting '.$client->name.' directly.';
+            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$client->name." specific facts that are not in the knowledge base.\n- Do not send the user to a contact page or contact form.\n- If the user wants human follow-up, tell them you can collect their details here for the team to reach out.";
         }
 
-        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$client->name."'s approved knowledge base.\n- Use this context as the primary source for ".$client->name."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$client->name."-specific facts that are not present in the context.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
+        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$client->name."'s approved knowledge base.\n- Use this context as the primary source for ".$client->name."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$client->name."-specific facts that are not present in the context.\n- Do not send the user to a contact page or contact form.\n- If the user wants human follow-up, tell them you can collect their details here for the team to reach out.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
     }
 
     private function promptHashSeed(Client $client): string
