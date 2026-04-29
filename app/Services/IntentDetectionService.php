@@ -4,6 +4,21 @@ namespace App\Services;
 
 class IntentDetectionService
 {
+    /**
+     * Deterministic fallback for explicit requests to be contacted by a human.
+     *
+     * @var list<string>
+     */
+    private const HUMAN_CONTACT_PATTERNS = [
+        '/\b(contact|reach)\s+(the\s+)?(team|someone|somebody|staff|sales|support|you)\b/i',
+        '/\b(can|could)\s+(someone|somebody|you)\s+(contact|call|reach)\s+me\b/i',
+        '/\b(call\s+me|contact\s+me|reach\s+me|get\s+back\s+to\s+me)\b/i',
+        '/\b(speak|talk)\s+to\s+(a|someone|somebody|the)\s+(human|person|real\s+person|agent|team)\b/i',
+        '/\b(can\s+i\s+contact\s+from\s+here)\b/i',
+        '/\b(submit|leave|share)\s+(my\s+)?(info|information|details|number|email)\b/i',
+        '/\b(be\s+contacted|get\s+a\s+callback|request\s+a\s+callback)\b/i',
+    ];
+
     public function __construct(
         private readonly AiClientFactory $aiClientFactory,
         private readonly AiModelCatalog $modelCatalog,
@@ -18,6 +33,13 @@ class IntentDetectionService
      */
     public function detectLeadCapture(string $userMessage, string $botAnswer): array
     {
+        if ($this->hasExplicitHumanContactIntent($userMessage)) {
+            return [
+                'capture' => true,
+                'trigger' => 'intent',
+            ];
+        }
+
         $prompt = <<<PROMPT
 You are a lead-capture classifier for a business chatbot. Given the visitor's message and the bot's reply, decide if this visitor is ready to be contacted by the business.
 
@@ -74,5 +96,22 @@ PROMPT;
     public function shouldCaptureLead(string $userMessage, string $botAnswer): bool
     {
         return $this->detectLeadCapture($userMessage, $botAnswer)['capture'];
+    }
+
+    private function hasExplicitHumanContactIntent(string $message): bool
+    {
+        $clean = trim($message);
+
+        if ($clean === '') {
+            return false;
+        }
+
+        foreach (self::HUMAN_CONTACT_PATTERNS as $pattern) {
+            if (preg_match($pattern, $clean) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

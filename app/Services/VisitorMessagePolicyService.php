@@ -39,6 +39,10 @@ class VisitorMessagePolicyService
             return null;
         }
 
+        if ($this->looksLikeContactDetail($clean)) {
+            return null;
+        }
+
         foreach (self::BLOCK_PATTERNS as $category => $patterns) {
             foreach ($patterns as $pattern) {
                 if (preg_match($pattern, $clean) === 1) {
@@ -48,6 +52,26 @@ class VisitorMessagePolicyService
         }
 
         return null;
+    }
+
+    private function looksLikeContactDetail(string $message): bool
+    {
+        if (preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $message) === 1) {
+            return true;
+        }
+
+        $digitsOnly = preg_replace('/\D+/', '', $message) ?? '';
+
+        if ($digitsOnly === '') {
+            return false;
+        }
+
+        if (strlen($digitsOnly) < 7 || strlen($digitsOnly) > 16) {
+            return false;
+        }
+
+        // Treat plain phone-like inputs as contact details, not math.
+        return preg_match('/^[\d\s\-\+\(\)]+$/', $message) === 1;
     }
 
     public function blockedResponse(Client $client): string

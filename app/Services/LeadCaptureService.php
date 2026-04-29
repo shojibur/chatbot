@@ -8,6 +8,15 @@ class LeadCaptureService
 {
     private const DEFAULT_INTRO_MESSAGE = 'I can help with that! May I get your name first so our team can follow up with you?';
 
+    /**
+     * @var list<string>
+     */
+    private const REFUSAL_PATTERNS = [
+        '/\b(no|nah|nope|skip|pass|cancel|stop)\b/i',
+        '/\b(do\s+not|don\'t|dont)\s+(contact|call|reach)\b/i',
+        '/\b(not\s+interested|never\s+mind|nevermind|forget\s+it|rather\s+not|prefer\s+not)\b/i',
+    ];
+
     public function __construct(
         private readonly AiClientFactory $aiClientFactory,
         private readonly AiModelCatalog $modelCatalog,
@@ -72,13 +81,47 @@ PROMPT;
     {
         $knownName = trim((string) ($leadData['name'] ?? ''));
         $knownContact = trim((string) ($leadData['contact'] ?? ''));
+        $extractedName = $knownName !== '' ? $knownName : $this->extractName($visitorMessage);
+        $extractedContact = $knownContact !== '' ? $knownContact : $this->extractContact($visitorMessage);
+
+        if ($this->isRefusal($visitorMessage)) {
+            return [
+                'name' => $extractedName,
+                'contact' => $extractedContact,
+                'next_step' => $step === 'ask_contact' ? 'ask_contact' : 'ask_name',
+                'assistant_message' => 'No problem at all. Feel free to keep chatting if you need anything else.',
+                'cancel_capture' => true,
+            ];
+        }
+
+        if ($step === 'ask_contact' && $extractedContact !== '') {
+            return [
+                'name' => $extractedName,
+                'contact' => $extractedContact,
+                'next_step' => 'done',
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, 'done'),
+                'cancel_capture' => false,
+            ];
+        }
+
+        if ($step === 'ask_name' && $extractedName !== '') {
+            $nextStep = $extractedContact !== '' ? 'done' : 'ask_contact';
+
+            return [
+                'name' => $extractedName,
+                'contact' => $extractedContact,
+                'next_step' => $nextStep,
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep),
+                'cancel_capture' => false,
+            ];
+        }
 
         $prompt = <<<PROMPT
 You are an AI lead-capture extractor for {$client->name}.
 
 Current step: {$step}
-Known name: {$knownName}
-Known contact: {$knownContact}
+Known name: {$extractedName}
+Known contact: {$extractedContact}
 Visitor reply: "{$visitorMessage}"
 
 Your job:
@@ -117,19 +160,19 @@ PROMPT;
             $content = (string) ($response->choices[0]->message->content ?? '');
             $decoded = $this->decodeJsonObject($content);
 
-            $name = trim((string) ($decoded['name'] ?? $knownName));
-            $contact = trim((string) ($decoded['contact'] ?? $knownContact));
-            $cancel = (bool) ($decoded['cancel_capture'] ?? false);
+            $name = $this->coalesceName(
+                trim((string) ($decoded['name'] ?? '')),
+                $extractedName,
+                $visitorMessage,
+            );
+            $contact = $this->coalesceContact(
+                trim((string) ($decoded['contact'] ?? '')),
+                $extractedContact,
+                $visitorMessage,
+            );
+            $cancel = (bool) ($decoded['cancel_capture'] ?? false) || $this->isRefusal($visitorMessage);
             $nextStep = (string) ($decoded['next_step'] ?? '');
             $assistantMessage = trim((string) ($decoded['assistant_message'] ?? ''));
-
-            if ($name === '') {
-                $name = $knownName;
-            }
-
-            if ($contact === '') {
-                $contact = $knownContact;
-            }
 
             if ($cancel) {
                 return [
@@ -159,13 +202,13 @@ PROMPT;
                 'cancel_capture' => false,
             ];
         } catch (\Throwable) {
-            $nextStep = $this->resolveNextStep($knownName, $knownContact);
+            $nextStep = $this->resolveNextStep($extractedName, $extractedContact);
 
             return [
-                'name' => $knownName,
-                'contact' => $knownContact,
+                'name' => $extractedName,
+                'contact' => $extractedContact,
                 'next_step' => $nextStep,
-                'assistant_message' => $this->fallbackAssistantMessage($knownName, $nextStep),
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep),
                 'cancel_capture' => false,
             ];
         }
@@ -220,5 +263,102 @@ PROMPT;
                 : "Thanks! We've got your contact details.",
             default => 'I want to make sure I get this right. What is your name?',
         };
+    }
+
+    private function coalesceName(string $candidate, string $fallback, string $visitorMessage): string
+    {
+        $candidate = $this->cleanName($candidate);
+
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        if ($fallback !== '') {
+            return $fallback;
+        }
+
+        return $this->extractName($visitorMessage);
+    }
+
+    private function coalesceContact(string $candidate, string $fallback, string $visitorMessage): string
+    {
+        $candidate = $this->extractContact($candidate);
+
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        if ($fallback !== '') {
+            return $fallback;
+        }
+
+        return $this->extractContact($visitorMessage);
+    }
+
+    private function extractContact(string $message): string
+    {
+        $message = trim($message);
+
+        if ($message === '') {
+            return '';
+        }
+
+        if (preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $message, $matches) === 1) {
+            return mb_strtolower($matches[0]);
+        }
+
+        if (preg_match('/(?<!\d)(?:\+?\d[\d\s\-()]{7,}\d)(?!\d)/', $message, $matches) === 1) {
+            return trim($matches[0]);
+        }
+
+        return '';
+    }
+
+    private function extractName(string $message): string
+    {
+        $message = trim($message);
+
+        if ($message === '' || $this->extractContact($message) !== '') {
+            return '';
+        }
+
+        $candidate = preg_replace('/\b(my\s+name\s+is|name\s+is|name\'s|i\s+am|i\'m|this\s+is)\b/iu', '', $message) ?? $message;
+        $candidate = $this->cleanName($candidate);
+
+        if ($candidate === '') {
+            return '';
+        }
+
+        $wordCount = preg_match_all('/[\p{L}]+(?:[\'\-][\p{L}]+)*/u', $candidate);
+
+        if ($wordCount === false || $wordCount < 1 || $wordCount > 4) {
+            return '';
+        }
+
+        if (preg_match('/\d/', $candidate) === 1) {
+            return '';
+        }
+
+        return $candidate;
+    }
+
+    private function cleanName(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/^[^\\p{L}]+|[^\\p{L}\'\\-\\s]+$/u', '', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    private function isRefusal(string $message): bool
+    {
+        foreach (self::REFUSAL_PATTERNS as $pattern) {
+            if (preg_match($pattern, $message) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
