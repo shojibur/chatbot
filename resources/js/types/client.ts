@@ -48,6 +48,8 @@ export type ClientListItem = {
     name: string;
     unique_code: string;
     contact_email: string | null;
+    lead_sms_enabled?: boolean;
+    lead_sms_to?: string | null;
     website_url: string | null;
     monthly_token_limit: number;
     current_month_tokens: number;
@@ -67,6 +69,8 @@ export type ClientFormRecord = {
     plan_id: number | null;
     name: string;
     contact_email: string;
+    lead_sms_enabled: boolean;
+    lead_sms_to: string;
     website_url: string;
     business_description: string;
     system_prompt: string;
@@ -97,6 +101,8 @@ export type ClientWorkspace = {
     name: string;
     unique_code: string;
     contact_email: string | null;
+    lead_sms_enabled: boolean;
+    lead_sms_to: string | null;
     website_url: string | null;
     business_description: string | null;
     system_prompt: string | null;

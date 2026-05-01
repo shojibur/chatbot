@@ -3,21 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Mail\NewLeadCaptured;
 use App\Models\ChatSession;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Services\LeadCaptureService;
-use Illuminate\Support\Facades\Log;
+use App\Services\LeadNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-use Throwable;
 
 class LeadController extends Controller
 {
     public function __construct(
         private readonly LeadCaptureService $leadCaptureService,
+        private readonly LeadNotificationService $leadNotificationService,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -64,20 +62,7 @@ class LeadController extends Controller
             'trigger'               => $data['trigger'] ?? 'intent',
         ]);
 
-        // Lead persistence should not fail just because notification delivery does.
-        if ($client->contact_email) {
-            try {
-                Mail::to($client->contact_email)
-                    ->queue(new NewLeadCaptured($lead->load('client')));
-            } catch (Throwable $e) {
-                Log::warning('Lead saved but notification failed to queue.', [
-                    'lead_id' => $lead->id,
-                    'client_id' => $client->id,
-                    'contact_email' => $client->contact_email,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
+        $this->leadNotificationService->notifyCapturedLead($lead);
 
         return response()->json([
             'success' => true,

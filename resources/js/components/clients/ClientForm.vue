@@ -169,6 +169,34 @@ function submit(): void {
                             <InputError :message="form.errors.contact_email" />
                         </div>
 
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label class="text-sm">Lead SMS alerts</Label>
+                            <label
+                                class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
+                            >
+                                <input
+                                    v-model="form.lead_sms_enabled"
+                                    type="checkbox"
+                                    class="size-4 rounded border-input"
+                                />
+                                Send an SMS to the client when a new lead is captured.
+                            </label>
+                            <InputError :message="form.errors.lead_sms_enabled" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="lead_sms_to">Lead SMS destination</Label>
+                            <Input
+                                id="lead_sms_to"
+                                v-model="form.lead_sms_to"
+                                placeholder="+15551234567"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Use E.164 format. Example: +15551234567.
+                            </p>
+                            <InputError :message="form.errors.lead_sms_to" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="website_url">Website URL</Label>
                             <Input
