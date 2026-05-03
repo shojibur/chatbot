@@ -7,8 +7,9 @@ import {
     Globe,
     Package,
     Sparkles,
+    X,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,8 @@ const props = defineProps<Props>();
 
 const form = useForm<ClientFormRecord>({ ...props.client });
 const CUSTOM_MODEL_OPTION = '__custom__';
+const avatarPreviewUrl = ref<string | null>(props.client.avatar_url);
+let avatarObjectUrl: string | null = null;
 
 const selectClass =
     'h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
@@ -80,6 +83,7 @@ function submit(): void {
     if (props.client.id) {
         form.patch(`/clients/${props.client.id}`, {
             preserveScroll: true,
+            forceFormData: true,
         });
 
         return;
@@ -87,8 +91,47 @@ function submit(): void {
 
     form.post('/clients', {
         preserveScroll: true,
+        forceFormData: true,
     });
 }
+
+function onAvatarChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0] ?? null;
+
+    form.avatar = file;
+    form.remove_avatar = false;
+
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+        avatarObjectUrl = null;
+    }
+
+    avatarPreviewUrl.value = props.client.avatar_url;
+
+    if (file) {
+        avatarObjectUrl = URL.createObjectURL(file);
+        avatarPreviewUrl.value = avatarObjectUrl;
+    }
+}
+
+function removeAvatar(): void {
+    form.avatar = null;
+    form.remove_avatar = true;
+
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+        avatarObjectUrl = null;
+    }
+
+    avatarPreviewUrl.value = null;
+}
+
+onUnmounted(() => {
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+    }
+});
 </script>
 
 <template>
@@ -635,6 +678,41 @@ function submit(): void {
                             <InputError :message="form.errors.theme_mode" />
                         </div>
 
+                        <div class="grid gap-3 md:col-span-2">
+                            <Label for="widget_avatar">Widget picture</Label>
+                            <div class="flex items-center gap-3 rounded-2xl border border-input p-3">
+                                <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border/70 bg-muted text-sm font-semibold text-muted-foreground">
+                                    <img
+                                        v-if="avatarPreviewUrl"
+                                        :src="avatarPreviewUrl"
+                                        alt="Widget avatar preview"
+                                        class="h-full w-full object-cover"
+                                    />
+                                    <span v-else>{{ (form.name || 'AI').slice(0, 2).toUpperCase() }}</span>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <Input
+                                        id="widget_avatar"
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,image/gif"
+                                        @change="onAvatarChange"
+                                    />
+                                    <p class="mt-2 text-xs text-muted-foreground">
+                                        Used in the public widget header to the left of the chatbot name. Max 2MB.
+                                    </p>
+                                </div>
+                                <button
+                                    v-if="avatarPreviewUrl"
+                                    type="button"
+                                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-sidebar-border/70 text-muted-foreground transition hover:bg-muted"
+                                    @click="removeAvatar"
+                                >
+                                    <X class="size-4" />
+                                </button>
+                            </div>
+                            <InputError :message="form.errors.avatar" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="primary_color">Primary color</Label>
                             <Input
@@ -794,10 +872,16 @@ function submit(): void {
                                 class="flex min-h-32 items-end justify-end"
                             >
                                 <div
-                                    class="flex h-14 w-14 items-center justify-center rounded-full text-sm font-medium text-white shadow-lg"
+                                    class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-sm font-medium text-white shadow-lg"
                                     :style="{ background: form.primary_color }"
                                 >
-                                    Chat
+                                    <img
+                                        v-if="avatarPreviewUrl"
+                                        :src="avatarPreviewUrl"
+                                        alt="Widget avatar preview"
+                                        class="h-full w-full object-cover"
+                                    />
+                                    <span v-else>Chat</span>
                                 </div>
                             </div>
 
@@ -808,12 +892,19 @@ function submit(): void {
                                 <div
                                     class="flex w-full items-center gap-3 rounded-full border border-white/70 bg-white/90 px-4 py-3 shadow-sm"
                                 >
-                                    <div
-                                        class="size-3 rounded-full"
-                                        :style="{
-                                            background: form.accent_color,
-                                        }"
-                                    ></div>
+                                    <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-slate-100">
+                                        <img
+                                            v-if="avatarPreviewUrl"
+                                            :src="avatarPreviewUrl"
+                                            alt="Widget avatar preview"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <div
+                                            v-else
+                                            class="size-3 rounded-full"
+                                            :style="{ background: form.accent_color }"
+                                        ></div>
+                                    </div>
                                     <span class="text-sm text-slate-700">{{
                                         form.toggle_text ||
                                         'Ask anything about this business'
@@ -825,11 +916,22 @@ function submit(): void {
                                 v-else
                                 class="min-h-32 rounded-[1.75rem] border border-white/25 bg-white/10 p-4 text-white shadow-lg backdrop-blur-md"
                             >
-                                <div
-                                    class="max-w-[80%] rounded-2xl px-3 py-2 text-sm"
-                                    :style="{ background: form.primary_color }"
-                                >
-                                    {{ form.welcome_message }}
+                                <div class="flex items-start gap-3">
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/20">
+                                        <img
+                                            v-if="avatarPreviewUrl"
+                                            :src="avatarPreviewUrl"
+                                            alt="Widget avatar preview"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <span v-else class="text-xs font-semibold">AI</span>
+                                    </div>
+                                    <div
+                                        class="max-w-[80%] rounded-2xl px-3 py-2 text-sm"
+                                        :style="{ background: form.primary_color }"
+                                    >
+                                        {{ form.welcome_message }}
+                                    </div>
                                 </div>
                             </div>
                         </div>

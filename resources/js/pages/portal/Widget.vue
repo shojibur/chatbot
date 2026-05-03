@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { Bot, Check, Palette, RotateCcw, Save } from 'lucide-vue-next';
+import { Bot, Check, Palette, RotateCcw, Save, X } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,9 @@ const props = defineProps<{
         theme_mode: 'system' | 'light' | 'dark';
         show_branding: boolean;
         default_expanded: boolean;
+        avatar: File | null;
+        avatar_url: string | null;
+        remove_avatar: boolean;
     };
     status?: string;
 }>();
@@ -40,7 +43,9 @@ const form = reactive({ ...props.form });
 const errors = ref<Record<string, string>>({});
 const saving = ref(false);
 const systemPrefersDark = ref(false);
+const avatarPreviewUrl = ref<string | null>(props.form.avatar_url);
 let previewMedia: MediaQueryList | null = null;
+let avatarObjectUrl: string | null = null;
 
 const saved = computed(() => props.status === 'widget-updated');
 
@@ -61,8 +66,9 @@ watch(() => form.welcome_message, (v) => {
 function save() {
     saving.value = true;
     errors.value = {};
-    router.patch('/portal/widget', { ...form }, {
+    router.post('/portal/widget', { ...form, _method: 'patch' }, {
         preserveScroll: true,
+        forceFormData: true,
         onError: (e) => { errors.value = e; },
         onFinish: () => { saving.value = false; },
     });
@@ -70,6 +76,43 @@ function save() {
 
 function reset() {
     Object.assign(form, props.form);
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+        avatarObjectUrl = null;
+    }
+    avatarPreviewUrl.value = props.form.avatar_url;
+}
+
+function onAvatarChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0] ?? null;
+
+    form.avatar = file;
+    form.remove_avatar = false;
+
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+        avatarObjectUrl = null;
+    }
+
+    avatarPreviewUrl.value = null;
+
+    if (file) {
+        avatarObjectUrl = URL.createObjectURL(file);
+        avatarPreviewUrl.value = avatarObjectUrl;
+    }
+}
+
+function removeAvatar() {
+    form.avatar = null;
+    form.remove_avatar = true;
+
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+        avatarObjectUrl = null;
+    }
+
+    avatarPreviewUrl.value = null;
 }
 
 function setThemeMode(mode: string) {
@@ -122,6 +165,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    if (avatarObjectUrl) {
+        URL.revokeObjectURL(avatarObjectUrl);
+    }
+
     if (!previewMedia) {
         return;
     }
@@ -235,6 +282,44 @@ onUnmounted(() => {
                                     </button>
                                 </div>
                                 <InputError :message="errors.theme_mode" />
+                            </div>
+
+                            <div class="space-y-3">
+                                <Label for="widget_avatar">Widget Picture</Label>
+                                <div class="flex items-center gap-3 rounded-xl border border-sidebar-border/50 bg-muted/20 p-3">
+                                    <div
+                                        class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border/50 bg-white text-xs font-semibold text-muted-foreground"
+                                    >
+                                        <img
+                                            v-if="avatarPreviewUrl"
+                                            :src="avatarPreviewUrl"
+                                            alt="Widget avatar preview"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <span v-else>{{ (form.name || 'AI').slice(0, 2).toUpperCase() }}</span>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <input
+                                            id="widget_avatar"
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/webp,image/gif"
+                                            class="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-white"
+                                            @change="onAvatarChange"
+                                        />
+                                        <p class="mt-1 text-xs text-muted-foreground">
+                                            Upload a chatbot profile picture shown beside the widget name. Max 2MB.
+                                        </p>
+                                    </div>
+                                    <button
+                                        v-if="avatarPreviewUrl"
+                                        type="button"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-sidebar-border/50 text-muted-foreground transition hover:bg-muted"
+                                        @click="removeAvatar"
+                                    >
+                                        <X class="h-4 w-4" />
+                                    </button>
+                                </div>
+                                <InputError :message="errors.avatar" />
                             </div>
 
                             <!-- Colors -->
@@ -408,10 +493,19 @@ onUnmounted(() => {
                                         :style="{ background: form.primary_color }"
                                     >
                                         <div class="flex items-center gap-2">
-                                            <div class="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                                                <Bot class="h-3.5 w-3.5 text-white" />
+                                            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/20">
+                                                <img
+                                                    v-if="avatarPreviewUrl"
+                                                    :src="avatarPreviewUrl"
+                                                    alt="Widget avatar preview"
+                                                    class="h-full w-full object-cover"
+                                                />
+                                                <Bot v-else class="h-4 w-4 text-white" />
                                             </div>
-                                            Chat Assistant
+                                            <div>
+                                                <div>{{ form.name || 'Chat Assistant' }}</div>
+                                                <div class="text-[10px] font-medium text-white/80">Online now</div>
+                                            </div>
                                         </div>
                                     </div>
 

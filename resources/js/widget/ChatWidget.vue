@@ -61,11 +61,26 @@
                   }
                 : { background: primaryColor }">
                 <div class="davey-header-info">
-                    <span class="davey-header-title">{{ config.name || 'Chat' }}</span>
-                    <span class="davey-header-status">
-                        <span class="davey-header-dot"></span>
-                        Online now
-                    </span>
+                    <div class="davey-header-identity">
+                        <div class="davey-header-avatar">
+                            <img
+                                v-if="avatarUrl"
+                                :src="avatarUrl"
+                                :alt="`${config.name || 'Chat'} avatar`"
+                                class="davey-header-avatar-image"
+                            />
+                            <span v-else class="davey-header-avatar-fallback">
+                                {{ avatarFallback }}
+                            </span>
+                        </div>
+                        <div class="davey-header-copy">
+                            <span class="davey-header-title">{{ config.name || 'Chat' }}</span>
+                            <span class="davey-header-status">
+                                <span class="davey-header-dot"></span>
+                                Online now
+                            </span>
+                        </div>
+                    </div>
                 </div>
                 <div class="davey-header-actions">
                     <button
@@ -200,6 +215,7 @@ interface WidgetConfig {
         theme_mode?: 'system' | 'light' | 'dark';
         show_branding?: boolean;
         default_expanded?: boolean;
+        avatar_url?: string | null;
     };
     welcome_message: string;
 }
@@ -244,6 +260,13 @@ const themeMode = computed<'system' | 'light' | 'dark'>(() => {
 
     return mode === 'dark' || mode === 'light' ? mode : 'system';
 });
+const avatarUrl = computed(() => props.config.widget_settings?.avatar_url || null);
+const avatarFallback = computed(() =>
+    (props.config.name || 'AI')
+        .trim()
+        .slice(0, 2)
+        .toUpperCase(),
+);
 
 const positionStyle = computed(() => {
     const pos = props.config.widget_settings?.position || 'right';

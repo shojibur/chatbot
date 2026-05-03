@@ -41,6 +41,7 @@ export type WidgetSettings = {
     theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
     default_expanded: boolean;
+    avatar_url?: string | null;
 };
 
 export type ClientListItem = {
@@ -93,6 +94,9 @@ export type ClientFormRecord = {
     theme_mode: 'system' | 'light' | 'dark';
     show_branding: boolean;
     default_expanded: boolean;
+    avatar: File | null;
+    avatar_url: string | null;
+    remove_avatar: boolean;
     notes: string;
 };
 

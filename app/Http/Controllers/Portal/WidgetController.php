@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,9 @@ class WidgetController extends Controller
                 'theme_mode'      => $settings->get('theme_mode', 'system'),
                 'show_branding'   => (bool) $settings->get('show_branding', true),
                 'default_expanded' => (bool) $settings->get('default_expanded', true),
+                'avatar' => null,
+                'avatar_url' => $this->resolveWidgetAvatarUrl($settings->get('avatar_path')),
+                'remove_avatar' => false,
             ],
             'status' => $request->session()->get('status'),
         ]);
@@ -54,6 +58,8 @@ class WidgetController extends Controller
             'theme_mode'      => ['required', 'in:' . implode(',', Client::WIDGET_THEME_MODES)],
             'show_branding'   => ['boolean'],
             'default_expanded' => ['boolean'],
+            'avatar' => ['nullable', 'image', 'max:2048'],
+            'remove_avatar' => ['nullable', 'boolean'],
         ]);
 
         $existingSettings = collect($client->widget_settings ?? [])->toArray();
@@ -76,6 +82,24 @@ class WidgetController extends Controller
             'default_expanded' => (bool) ($validated['default_expanded'] ?? true),
         ]);
 
+        $avatarPath = $existingSettings['avatar_path'] ?? null;
+
+        if ((bool) ($validated['remove_avatar'] ?? false)) {
+            $this->deleteWidgetAvatar($avatarPath);
+            $avatarPath = null;
+        }
+
+        if ($request->hasFile('avatar')) {
+            $this->deleteWidgetAvatar($avatarPath);
+            $avatarPath = $request->file('avatar')->store('widget-avatars', 'public');
+        }
+
+        if ($avatarPath) {
+            $widgetSettings['avatar_path'] = $avatarPath;
+        } else {
+            unset($widgetSettings['avatar_path']);
+        }
+
         $client->update([
             'widget_style'    => $validated['widget_style'],
             'widget_settings' => $widgetSettings,
@@ -84,5 +108,21 @@ class WidgetController extends Controller
         Cache::forget("widget_config_{$client->unique_code}");
 
         return back()->with('status', 'widget-updated');
+    }
+
+    private function resolveWidgetAvatarUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    private function deleteWidgetAvatar(?string $path): void
+    {
+        if ($path) {
+            Storage::disk('public')->delete($path);
+        }
     }
 }

@@ -62,6 +62,8 @@ abstract class ClientRequest extends FormRequest
             'theme_mode' => ['required', Rule::in(Client::WIDGET_THEME_MODES)],
             'show_branding' => ['required', 'boolean'],
             'default_expanded' => ['required', 'boolean'],
+            'avatar' => ['nullable', 'image', 'max:2048'],
+            'remove_avatar' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

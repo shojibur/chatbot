@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -344,6 +345,7 @@ class ClientController extends Controller
      */
     public function destroy(Client $client): RedirectResponse
     {
+        $this->deleteWidgetAvatar(Collection::make($client->widget_settings)->get('avatar_path'));
         Cache::forget("widget_config_{$client->unique_code}");
 
         $client->delete();
@@ -380,6 +382,24 @@ class ClientController extends Controller
             'show_branding' => $validated['show_branding'],
             'default_expanded' => $validated['default_expanded'],
         ]);
+
+        $avatarPath = $existingWidgetSettings['avatar_path'] ?? null;
+
+        if ((bool) ($validated['remove_avatar'] ?? false)) {
+            $this->deleteWidgetAvatar($avatarPath);
+            $avatarPath = null;
+        }
+
+        if ($request->hasFile('avatar')) {
+            $this->deleteWidgetAvatar($avatarPath);
+            $avatarPath = $request->file('avatar')->store('widget-avatars', 'public');
+        }
+
+        if ($avatarPath) {
+            $widgetSettings['avatar_path'] = $avatarPath;
+        } else {
+            unset($widgetSettings['avatar_path']);
+        }
 
         return [
             'plan_id' => $validated['plan_id'],
@@ -476,6 +496,9 @@ class ClientController extends Controller
             'theme_mode' => Client::WIDGET_THEME_MODES[0],
             'show_branding' => true,
             'default_expanded' => true,
+            'avatar' => null,
+            'avatar_url' => null,
+            'remove_avatar' => false,
             'notes' => '',
         ];
     }
@@ -553,6 +576,9 @@ class ClientController extends Controller
             'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
             'show_branding' => (bool) $settings->get('show_branding', true),
             'default_expanded' => (bool) $settings->get('default_expanded', true),
+            'avatar' => null,
+            'avatar_url' => $this->resolveWidgetAvatarUrl($settings->get('avatar_path')),
+            'remove_avatar' => false,
             'notes' => $client->notes ?? '',
         ];
     }
@@ -609,6 +635,7 @@ class ClientController extends Controller
                 'theme_mode' => $settings->get('theme_mode', Client::WIDGET_THEME_MODES[0]),
                 'show_branding' => (bool) $settings->get('show_branding', true),
                 'default_expanded' => (bool) $settings->get('default_expanded', true),
+                'avatar_url' => $this->resolveWidgetAvatarUrl($settings->get('avatar_path')),
             ],
             'created_at' => $client->created_at?->toDateTimeString(),
         ];
@@ -693,5 +720,21 @@ class ClientController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function resolveWidgetAvatarUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    private function deleteWidgetAvatar(?string $path): void
+    {
+        if ($path) {
+            Storage::disk('public')->delete($path);
+        }
     }
 }

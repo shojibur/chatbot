@@ -16,6 +16,7 @@ use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ChatController extends Controller
@@ -272,7 +273,10 @@ class ChatController extends Controller
         return response()->json([
             'name' => $client->name,
             'widget_style' => $client->widget_style,
-            'widget_settings' => $client->widget_settings,
+            'widget_settings' => [
+                ...($client->widget_settings ?? []),
+                'avatar_url' => $this->resolveWidgetAvatarUrl($client->widget_settings['avatar_path'] ?? null),
+            ],
             'welcome_message' => $client->widget_settings['welcome_message'] ?? 'Hi! How can I help you?',
         ])->header('Cache-Control', 'no-cache, must-revalidate');
     }
@@ -407,5 +411,14 @@ if (! $context) {
         }
 
         return strtolower($host);
+    }
+
+    private function resolveWidgetAvatarUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 }

@@ -9,11 +9,26 @@
         <div class="davey-iframe-panel">
             <div class="davey-iframe-header" :style="{ background: primaryColor }">
                 <div class="davey-iframe-header-info">
-                    <span class="davey-iframe-header-title">{{ config.name || 'Chat' }}</span>
-                    <span class="davey-iframe-header-status">
-                        <span class="davey-iframe-header-dot"></span>
-                        Online now
-                    </span>
+                    <div class="davey-iframe-header-identity">
+                        <div class="davey-iframe-header-avatar">
+                            <img
+                                v-if="avatarUrl"
+                                :src="avatarUrl"
+                                :alt="`${config.name || 'Chat'} avatar`"
+                                class="davey-iframe-header-avatar-image"
+                            />
+                            <span v-else class="davey-iframe-header-avatar-fallback">
+                                {{ avatarFallback }}
+                            </span>
+                        </div>
+                        <div class="davey-iframe-header-copy">
+                            <span class="davey-iframe-header-title">{{ config.name || 'Chat' }}</span>
+                            <span class="davey-iframe-header-status">
+                                <span class="davey-iframe-header-dot"></span>
+                                Online now
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -105,6 +120,7 @@ interface WidgetConfig {
         };
         theme_mode?: 'system' | 'light' | 'dark';
         show_branding?: boolean;
+        avatar_url?: string | null;
     };
     welcome_message: string;
 }
@@ -153,6 +169,13 @@ const themeMode = computed<'system' | 'light' | 'dark'>(() => {
     return mode === 'dark' || mode === 'light' ? mode : 'system';
 });
 const inputPlaceholder = computed(() => 'Type a message...');
+const avatarUrl = computed(() => props.config.widget_settings?.avatar_url || null);
+const avatarFallback = computed(() =>
+    (props.config.name || 'AI')
+        .trim()
+        .slice(0, 2)
+        .toUpperCase(),
+);
 
 onMounted(() => {
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
@@ -404,6 +427,45 @@ function scrollToBottom() {
     display: flex;
     flex-direction: column;
     gap: 2px;
+}
+
+.davey-iframe-header-identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.davey-iframe-header-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.davey-iframe-header-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.davey-iframe-header-avatar-fallback {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.davey-iframe-header-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .davey-iframe-header-title {
