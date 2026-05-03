@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+// You can leave this import here just in case, or delete it if you strictly use the <img> tag
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { home } from '@/routes';
 
@@ -11,32 +12,31 @@ defineProps<{
 
 <template>
     <div
-        class="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10"
+        class="flex min-h-svh flex-col items-center justify-center gap-6 bg-slate-950 text-white p-6 md:p-10"
     >
         <div class="w-full max-w-sm">
             <div class="flex flex-col gap-8">
+                
                 <div class="flex flex-col items-center gap-4">
                     <Link
                         :href="home()"
-                        class="flex flex-col items-center gap-2 font-medium"
+                        class="flex flex-col items-center gap-2 font-medium focus:outline-none"
                     >
-                        <div
-                            class="mb-1 flex h-9 w-9 items-center justify-center rounded-md"
-                        >
-                            <AppLogoIcon
-                                class="size-9 fill-current text-[var(--foreground)] dark:text-white"
-                            />
-                        </div>
+                        <img src="/logo.png" alt="Zao Chat" class="h-10 w-auto mb-2" />
+
                         <span class="sr-only">{{ title }}</span>
                     </Link>
+                    
                     <div class="space-y-2 text-center">
-                        <h1 class="text-xl font-medium">{{ title }}</h1>
-                        <p class="text-center text-sm text-muted-foreground">
+                        <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
+                        <p class="text-center text-sm text-slate-400">
                             {{ description }}
                         </p>
                     </div>
                 </div>
+                
                 <slot />
+                
             </div>
         </div>
     </div>
