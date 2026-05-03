@@ -277,10 +277,10 @@ const positionStyle = computed(() => {
 });
 
 const expandedStyle = computed(() => ({
-    top: '0',
-    right: '0',
-    bottom: '0',
-    left: '0',
+    top: '32px',
+    right: '32px',
+    bottom: '32px',
+    left: '32px',
 }));
 
 const widgetStyle = computed(() => (
