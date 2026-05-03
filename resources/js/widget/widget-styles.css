@@ -3,7 +3,7 @@
 .davey-widget {
     position: fixed;
     bottom: 20px;
-    z-index: 99999;
+    z-index: 2147483647;
     font-family:
         -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
@@ -12,10 +12,10 @@
 }
 
 .davey-widget.davey-expanded {
-    top: 32px;
-    right: 32px;
-    bottom: 32px;
-    left: 32px;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
 }
 
 .davey-widget *,
@@ -110,6 +110,7 @@
     width: 100%;
     height: 100%;
     max-height: none;
+    border-radius: 0;
 }
 
 /* ── Style: Classic ── */
