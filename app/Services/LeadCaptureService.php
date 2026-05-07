@@ -81,7 +81,7 @@ PROMPT;
      */
     public function extractCompletedLeadFromAnswer(string $answer): ?array
     {
-        $matchedJson = $this->extractTrailingLeadJson($answer);
+        $matchedJson = $this->extractTrailingLeadJson($answer, $offset);
 
         if ($matchedJson === null) {
             return null;
@@ -99,7 +99,10 @@ PROMPT;
             return null;
         }
 
-        $visibleAnswer = trim(substr($answer, 0, -strlen($matchedJson)));
+        // The visible answer is everything before the JSON block
+        $visibleAnswer = trim(substr($answer, 0, $offset));
+        // Remove trailing backticks/json declarations that might have preceded the JSON block
+        $visibleAnswer = preg_replace('/```json\s*$/i', '', $visibleAnswer) ?? $visibleAnswer;
         $visibleAnswer = trim(preg_replace("/\n{3,}/", "\n\n", $visibleAnswer) ?? $visibleAnswer);
 
         return [
@@ -321,15 +324,17 @@ PROMPT;
         throw new \RuntimeException('Lead capture AI did not return valid JSON.');
     }
 
-    private function extractTrailingLeadJson(string $answer): ?string
+    private function extractTrailingLeadJson(string $answer, &$offset = 0): ?string
     {
         $trimmed = trim($answer);
 
-        if (preg_match('/(\{[\s\S]*"lead_status"\s*:\s*"complete"[\s\S]*\})\s*$/', $trimmed, $matches) !== 1) {
+        // Allow trailing backticks and whitespace after the JSON block
+        if (preg_match('/(\{[\s\S]*"lead_status"\s*:\s*"complete"[\s\S]*\})[\s`]*$/', $trimmed, $matches, PREG_OFFSET_CAPTURE) !== 1) {
             return null;
         }
 
-        return $matches[1];
+        $offset = $matches[1][1];
+        return $matches[1][0];
     }
 
     private function resolveNextStep(string $name, string $contact): string
