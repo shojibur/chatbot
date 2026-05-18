@@ -96,6 +96,7 @@ class LeadNotificationService
         try {
             $result = $this->sentClient->messages->send(
                 to: [$to],
+                channel: ['sms', 'whatsapp'],
                 template: [
                     'id' => $templateId,
                     'parameters' => [
