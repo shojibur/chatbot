@@ -18,6 +18,7 @@
         "openai-php/laravel": "^0.19.1",
         "pgvector/pgvector": "^0.2.2",
         "resend/resend-laravel": "^1.3",
+        "sentdm/sent-dm-php": "^0.20.2",
         "spatie/pdf-to-text": "^1.54"
     },
     "require-dev": {

@@ -7,10 +7,15 @@ use App\Models\Lead;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use SentDm\Client as SentDMClient;
 use Throwable;
 
 class LeadNotificationService
 {
+    public function __construct(
+        private readonly SentDMClient $sentClient
+    ) {}
+
     public function notifyCapturedLead(Lead $lead): void
     {
         $lead->loadMissing('client');
@@ -54,8 +59,8 @@ class LeadNotificationService
     {
         $client = $lead->client;
 
-        if (! config('services.twilio.sms_enabled', false)) {
-            Log::info('Lead SMS notification skipped: Twilio SMS disabled.', [
+        if (! config('services.sent_dm.sms_enabled', false)) {
+            Log::info('Lead SMS notification skipped: Sent DM SMS disabled.', [
                 'lead_id' => $lead->id,
                 'client_id' => $lead->client_id,
             ]);
@@ -73,57 +78,48 @@ class LeadNotificationService
         }
 
         $to = trim((string) ($client->lead_sms_to ?? ''));
-        $from = trim((string) config('services.twilio.sms_from'));
-        $accountSid = trim((string) config('services.twilio.account_sid'));
-        $authToken = trim((string) config('services.twilio.auth_token'));
-        $timeout = (int) config('services.twilio.sms_timeout', 15);
+        $apiKey = trim((string) config('services.sent_dm.api_key'));
+        $templateId = trim((string) config('services.sent_dm.template_id'));
 
-        if ($to === '' || $from === '' || $accountSid === '' || $authToken === '') {
-            Log::warning('Lead SMS notification skipped: Twilio config incomplete.', [
+        if ($to === '' || $apiKey === '' || $templateId === '') {
+            Log::warning('Lead SMS notification skipped: Sent DM config incomplete.', [
                 'lead_id' => $lead->id,
                 'client_id' => $lead->client_id,
                 'has_to' => $to !== '',
-                'has_from' => $from !== '',
-                'has_account_sid' => $accountSid !== '',
-                'has_auth_token' => $authToken !== '',
+                'has_api_key' => $apiKey !== '',
+                'has_template_id' => $templateId !== '',
             ]);
 
             return;
         }
 
         try {
-            $response = Http::asForm()
-                ->withBasicAuth($accountSid, $authToken)
-                ->timeout($timeout)
-                ->post(
-                    "https://api.twilio.com/2010-04-01/Accounts/{$accountSid}/Messages.json",
-                    [
-                        'To' => $to,
-                        'From' => $from,
-                        'Body' => $this->buildSmsBody($lead),
-                    ]
-                );
-
-            if ($response->failed()) {
-                Log::error('Lead SMS notification failed.', [
-                    'lead_id' => $lead->id,
-                    'client_id' => $lead->client_id,
-                    'sms_to' => $to,
-                    'twilio_status' => $response->status(),
-                    'twilio_response' => $response->json() ?? $response->body(),
-                ]);
-
-                return;
-            }
-
-            $payload = $response->json();
+            $result = $this->sentClient->messages->send(
+                to: [$to],
+                template: [
+                    'id' => $templateId,
+                    'parameters' => [
+                        'businessName' => $lead->client->name ?? 'Unknown',
+                        'leadName' => $lead->name ?? 'Unknown',
+                        'leadContact' => $lead->contact ?? 'N/A',
+                        'request' => $lead->user_request ?? 'No request specified',
+                    ],
+                ]
+            );
 
             Log::info('Lead SMS notification sent.', [
                 'lead_id' => $lead->id,
                 'client_id' => $lead->client_id,
                 'sms_to' => $to,
-                'twilio_sid' => $payload['sid'] ?? null,
-                'twilio_status' => $payload['status'] ?? null,
+                'message_id' => $result->data->recipients[0]->messageID ?? null,
+                'status' => $result->data->status ?? null,
+            ]);
+        } catch (\SentDm\Core\Exceptions\APIException $e) {
+            Log::error('Lead SMS notification failed (SentDM API error).', [
+                'lead_id' => $lead->id,
+                'client_id' => $lead->client_id,
+                'sms_to' => $to,
+                'error' => $e->getMessage(),
             ]);
         } catch (Throwable $e) {
             Log::error('Lead SMS notification request threw an exception.', [

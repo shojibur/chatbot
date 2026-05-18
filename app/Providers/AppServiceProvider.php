@@ -16,7 +16,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\SentDm\Client::class, function ($app) {
+            return new \SentDm\Client(
+                config('services.sent_dm.api_key', '')
+            );
+        });
     }
 
     /**

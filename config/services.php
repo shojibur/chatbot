@@ -40,12 +40,10 @@ return [
         'organization' => env('OPENAI_ORGANIZATION'),
     ],
 
-    'twilio' => [
-        'sms_enabled' => env('TWILIO_SMS_ENABLED', false),
-        'account_sid' => env('TWILIO_ACCOUNT_SID'),
-        'auth_token' => env('TWILIO_AUTH_TOKEN'),
-        'sms_from' => env('TWILIO_SMS_FROM'),
-        'sms_timeout' => env('TWILIO_SMS_TIMEOUT', 15),
+    'sent_dm' => [
+        'sms_enabled' => env('SENT_DM_SMS_ENABLED', false),
+        'api_key' => env('SENT_DM_API_KEY'),
+        'template_id' => env('SENT_DM_TEMPLATE_ID'),
     ],
 
 ];
