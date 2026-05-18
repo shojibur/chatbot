@@ -328,13 +328,20 @@ PROMPT;
     {
         $trimmed = trim($answer);
 
-        // Allow trailing backticks and whitespace after the JSON block
-        if (preg_match('/(\{[\s\S]*"lead_status"\s*:\s*"complete"[\s\S]*\})[\s`]*$/', $trimmed, $matches, PREG_OFFSET_CAPTURE) !== 1) {
+        // Strip trailing markdown code fences that may wrap the JSON block
+        $cleaned = preg_replace('/\s*```\s*$/', '', $trimmed) ?? $trimmed;
+
+        // Allow trailing backticks, whitespace, and markdown after the JSON block
+        if (preg_match('/(\{[\s\S]*"lead_status"\s*:\s*"complete"[\s\S]*\})[\s`]*$/', $cleaned, $matches, PREG_OFFSET_CAPTURE) !== 1) {
             return null;
         }
 
-        $offset = $matches[1][1];
-        return $matches[1][0];
+        // Find the offset in the original string (account for any stripping)
+        $jsonStr = $matches[1][0];
+        $originalPos = strrpos($trimmed, $jsonStr);
+        $offset = $originalPos !== false ? $originalPos : $matches[1][1];
+
+        return $jsonStr;
     }
 
     private function resolveNextStep(string $name, string $contact): string

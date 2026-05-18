@@ -239,6 +239,11 @@ class ChatController extends Controller
             $answer = trim(str_replace('[TRIGGER_LEAD]', '', $answer));
         }
 
+        // Safety net: strip any leaked lead JSON that the extractor didn't catch
+        $answer = preg_replace('/\s*```(?:json)?\s*\{[^}]*"lead_status"\s*:\s*"[^"]*"[^}]*\}\s*```/s', '', $answer) ?? $answer;
+        $answer = preg_replace('/\s*\{[^}]*"lead_status"\s*:\s*"[^"]*"[^}]*\}\s*$/s', '', $answer) ?? $answer;
+        $answer = trim($answer);
+
         // Log the assistant response to chat history (using the clean answer)
         $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
 
