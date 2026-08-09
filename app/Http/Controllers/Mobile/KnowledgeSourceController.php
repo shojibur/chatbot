@@ -19,14 +19,19 @@ class KnowledgeSourceController extends MobileController
     {
         $client = $this->currentClient($request);
 
-        $sources = $client->knowledgeSources()
+        $paginator = $client->knowledgeSources()
             ->latest()
-            ->limit(25)
-            ->get()
-            ->map(fn ($source) => $this->transformKnowledgeSource($source));
+            ->paginate(15, ['*'], 'page', $request->integer('page', 1));
 
         return response()->json([
-            'knowledge_sources' => $sources,
+            'knowledge_sources' => $paginator->map(fn ($source) => $this->transformKnowledgeSource($source)),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+                'has_more'     => $paginator->hasMorePages(),
+            ],
         ]);
     }
 

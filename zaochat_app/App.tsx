@@ -6,7 +6,7 @@ import {
   Inter_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import * as DocumentPicker from 'expo-document-picker';
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -26,15 +27,14 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
-  createKnowledgeSource,
-  deleteKnowledgeSource,
+  changePassword,
+  fetchKnowledgePage,
   getSessionMessages,
   getLeadDetail,
   loadMobileAppData,
   login as loginRequest,
   logout as logoutRequest,
   releaseSessionTakeover,
-  retryKnowledgeSource,
   sendSessionMessage,
   takeoverSession,
   updateLeadStatus,
@@ -43,6 +43,7 @@ import {
   type MobileKnowledgeSource,
   type MobileLead,
   type MobileLeadDetail,
+  type MobilePaginatedKnowledge,
   type MobileSession,
   type MobileSessionMessage,
   type MobileSettingsPayload,
@@ -56,11 +57,13 @@ const TOKEN_STORAGE_KEY = 'zaochat.mobile.auth_token';
 type Screen = 'splash' | 'onboarding' | 'login' | 'app';
 type Tab = 'sessions' | 'leads' | 'knowledge' | 'settings';
 
-const TAB_ITEMS: Array<{ key: Tab; label: string; glyph: string }> = [
-  { key: 'sessions', label: 'Sessions', glyph: 'S' },
-  { key: 'leads', label: 'Leads', glyph: 'L' },
-  { key: 'knowledge', label: 'Knowledge', glyph: 'K' },
-  { key: 'settings', label: 'Settings', glyph: 'G' },
+type TabItem = { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap };
+
+const TAB_ITEMS: TabItem[] = [
+  { key: 'sessions',  label: 'Sessions',  icon: 'chatbubble-outline',  iconActive: 'chatbubble' },
+  { key: 'leads',     label: 'Leads',     icon: 'flash-outline',       iconActive: 'flash' },
+  { key: 'knowledge', label: 'Knowledge', icon: 'library-outline',     iconActive: 'library' },
+  { key: 'settings',  label: 'Settings',  icon: 'settings-outline',    iconActive: 'settings' },
 ];
 
 export default function App() {
@@ -530,9 +533,9 @@ function AppShell({
         ) : null}
         {activeTab === 'knowledge' ? (
           <KnowledgeTab
-            sources={appData.knowledgeSources}
+            initialSources={appData.knowledgeSources}
+            initialMeta={appData.knowledgeMeta}
             token={token}
-            onSourcesChange={(knowledgeSources) => onDataChange({ ...appData, knowledgeSources })}
           />
         ) : null}
         {activeTab === 'settings' ? (
@@ -549,51 +552,46 @@ function AppShell({
       <View
         style={[
           styles.tabBar,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+          {
+            backgroundColor: theme.colors.card,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+          },
         ]}
       >
-        {TAB_ITEMS.map((tab) => (
-          <Pressable
-            key={tab.key}
-            style={[
-              styles.tabButton,
-              {
-                backgroundColor: activeTab === tab.key ? theme.colors.primary : 'transparent',
-                borderColor: activeTab === tab.key ? theme.colors.primary : 'transparent',
-              },
-            ]}
-            onPress={() => onChangeTab(tab.key)}
-          >
-            <View
-              style={[
-                styles.tabIconWrap,
-                {
-                  backgroundColor:
-                    activeTab === tab.key ? 'rgba(255,255,255,0.18)' : theme.colors.surface,
-                  borderColor:
-                    activeTab === tab.key ? 'rgba(255,255,255,0.12)' : theme.colors.border,
-                },
-              ]}
+        {TAB_ITEMS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={styles.tabButton}
+              onPress={() => onChangeTab(tab.key)}
             >
-              <Text
+              <View
                 style={[
-                  styles.tabIconText,
-                  { color: activeTab === tab.key ? theme.colors.primaryText : theme.colors.text },
+                  styles.tabIconPill,
+                  isActive && {
+                    backgroundColor: theme.colors.primary,
+                  },
                 ]}
               >
-                {tab.glyph}
+                <Ionicons
+                  name={isActive ? tab.iconActive : tab.icon}
+                  size={22}
+                  color={isActive ? '#ffffff' : theme.colors.muted}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isActive ? theme.colors.primary : theme.colors.muted },
+                ]}
+              >
+                {tab.label}
               </Text>
-            </View>
-            <Text
-              style={[
-                styles.tabButtonText,
-                { color: activeTab === tab.key ? theme.colors.primaryText : theme.colors.muted },
-              ]}
-            >
-              {tab.label}
-            </Text>
-          </Pressable>
-        ))}
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -686,162 +684,279 @@ function SessionsTab({
     }
   }
 
-  return (
-    <View style={styles.sectionColumn}>
-      <View style={styles.heroWrap}>
-        <GlowBackground />
-        <Image source={logo} style={styles.homeLogo} resizeMode="contain" />
-        <Text style={[styles.headline, { color: theme.colors.text }]}>Sessions</Text>
-        <Text style={[styles.subhead, { color: theme.colors.muted }]}>
-          Review live threads, switch to human takeover, and send operator replies from mobile.
-        </Text>
-      </View>
+  // When a session is open, render the full chat thread view
+  if (selectedSession) {
+    return (
+      <View style={styles.sectionColumn}>
+        {/* Thread header */}
+        <View style={[styles.threadHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Pressable style={styles.threadBackBtn} onPress={() => { setSelectedSession(null); setMessages([]); setError(null); setSuccess(null); }}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+            <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>Sessions</Text>
+          </Pressable>
 
-      {sessions.map((session) => (
-        <Pressable key={session.id} onPress={() => openSession(session)}>
-          <CardRow
-            title={session.visitor_identifier || session.visitor_ip || 'Anonymous visitor'}
-            subtitle={session.first_message || session.page_url || 'No preview available'}
-            meta={session.is_human_takeover ? 'Human live' : `${session.message_count} msgs`}
-          />
-        </Pressable>
-      ))}
-
-      {selectedSession ? (
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Session detail'}
-          </Text>
-          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-            {selectedSession.is_human_takeover
-              ? 'AI is paused. Replies sent here will go out as the business operator.'
-              : 'AI is active. Use takeover before replying manually.'}
-          </Text>
-          <View style={styles.statusRow}>
-            <Pressable
-              style={[
-                styles.statusButton,
-                {
-                  backgroundColor: selectedSession.is_human_takeover
-                    ? theme.colors.primary
-                    : theme.colors.surface,
-                  borderColor: selectedSession.is_human_takeover
-                    ? theme.colors.primary
-                    : theme.colors.border,
-                  opacity: savingTakeover ? 0.7 : 1,
-                },
-              ]}
-              disabled={savingTakeover}
-              onPress={handleTakeover}
-            >
-              <Text
-                style={[
-                  styles.statusButtonText,
-                  {
-                    color: selectedSession.is_human_takeover
-                      ? theme.colors.primaryText
-                      : theme.colors.text,
-                  },
-                ]}
-              >
-                {savingTakeover
-                  ? 'Saving...'
-                  : selectedSession.is_human_takeover
-                    ? 'Release to AI'
-                    : 'Take Over'}
-              </Text>
-            </Pressable>
-          </View>
-          {error ? <ErrorBanner text={error} /> : null}
-          {success ? <SuccessBanner text={success} /> : null}
-          {loading ? (
-            <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>Loading messages...</Text>
-          ) : (
-            <View style={styles.messagesColumn}>
-              {messages.map((message) => (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.messageBubble,
-                    {
-                      backgroundColor:
-                        message.role === 'assistant'
-                          ? message.human_takeover
-                            ? theme.colors.card
-                            : theme.colors.surface
-                          : theme.colors.primary,
-                      borderColor:
-                        message.role === 'assistant'
-                          ? message.human_takeover
-                            ? theme.colors.accent
-                            : theme.colors.border
-                          : theme.colors.primary,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.messageRole,
-                      {
-                        color:
-                          message.role === 'assistant'
-                            ? message.human_takeover
-                              ? theme.colors.accent
-                              : theme.colors.accent
-                            : theme.colors.primaryText,
-                      },
-                    ]}
-                  >
-                    {message.role === 'assistant'
-                      ? message.human_takeover
-                        ? message.sent_by_name || 'Human operator'
-                        : 'AI'
-                      : 'Visitor'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.messageContent,
-                      { color: message.role === 'assistant' ? theme.colors.text : theme.colors.primaryText },
-                    ]}
-                  >
-                    {message.content}
-                  </Text>
-                </View>
-              ))}
+          <View style={styles.threadHeaderCenter}>
+            <View style={[styles.threadAvatar, { backgroundColor: theme.colors.primary + '22' }]}>
+              <Ionicons name="person" size={16} color={theme.colors.primary} />
             </View>
-          )}
-          <Field
-            label="Reply as business"
-            value={replyText}
-            onChangeText={setReplyText}
-            placeholder="Type the human reply"
-            multiline
-          />
+            <View style={{ gap: 1 }}>
+              <Text style={[styles.threadHeaderName, { color: theme.colors.text }]} numberOfLines={1}>
+                {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Anonymous'}
+              </Text>
+              <Text style={[styles.threadHeaderMeta, { color: theme.colors.muted }]}>
+                {selectedSession.message_count} messages
+              </Text>
+            </View>
+          </View>
+
+          {/* Takeover toggle pill */}
           <Pressable
             style={[
-              styles.fullWidthPrimaryButton,
+              styles.takeoverPill,
               {
-                backgroundColor: theme.colors.primary,
-                opacity: sendingMessage || !replyText.trim() ? 0.7 : 1,
+                backgroundColor: selectedSession.is_human_takeover ? theme.colors.primary : theme.colors.surface,
+                borderColor: selectedSession.is_human_takeover ? theme.colors.primary : theme.colors.border,
+                opacity: savingTakeover ? 0.6 : 1,
               },
             ]}
-            disabled={sendingMessage || !replyText.trim()}
-            onPress={handleSendMessage}
+            disabled={savingTakeover}
+            onPress={handleTakeover}
           >
-            <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
-              {sendingMessage ? 'Sending...' : 'Send Human Reply'}
+            <Ionicons
+              name={selectedSession.is_human_takeover ? 'hand-left' : 'hardware-chip-outline'}
+              size={13}
+              color={selectedSession.is_human_takeover ? '#fff' : theme.colors.muted}
+            />
+            <Text style={[styles.takeoverPillText, { color: selectedSession.is_human_takeover ? '#fff' : theme.colors.muted }]}>
+              {savingTakeover ? '...' : selectedSession.is_human_takeover ? 'Live' : 'AI'}
             </Text>
           </Pressable>
         </View>
-      ) : null}
+
+        {/* Status banner */}
+        {selectedSession.is_human_takeover ? (
+          <View style={[styles.takeoverBanner, { backgroundColor: theme.colors.primary + '18', borderColor: theme.colors.primary + '40' }]}>
+            <Ionicons name="hand-left" size={14} color={theme.colors.primary} />
+            <Text style={[styles.takeoverBannerText, { color: theme.colors.primary }]}>
+              You are live — replies go directly to the visitor
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.takeoverBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <Ionicons name="hardware-chip-outline" size={14} color={theme.colors.muted} />
+            <Text style={[styles.takeoverBannerText, { color: theme.colors.muted }]}>
+              AI is active — tap Live to take over this conversation
+            </Text>
+          </View>
+        )}
+
+        {error ? <ErrorBanner text={error} /> : null}
+        {success ? <SuccessBanner text={success} /> : null}
+
+        {/* Messages */}
+        {loading ? (
+          <View style={styles.threadLoadingWrap}>
+            <ActivityIndicator color={theme.colors.primary} />
+            <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages...</Text>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.threadEmptyWrap}>
+            <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
+            <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages yet</Text>
+          </View>
+        ) : (
+          <View style={styles.messagesColumn}>
+            {messages.map((message) => {
+              const isVisitor = message.role === 'user';
+              const isHuman = message.role === 'assistant' && message.human_takeover;
+              const isAI = message.role === 'assistant' && !message.human_takeover;
+
+              return (
+                <View
+                  key={message.id}
+                  style={[
+                    styles.chatBubbleRow,
+                    isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight,
+                  ]}
+                >
+                  {isVisitor ? (
+                    <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                      <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
+                    </View>
+                  ) : null}
+
+                  <View style={{ maxWidth: '75%', gap: 4 }}>
+                    <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
+                      {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
+                    </Text>
+                    <View
+                      style={[
+                        styles.chatBubble,
+                        isVisitor
+                          ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+                          : isHuman
+                          ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
+                          : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chatBubbleText,
+                          { color: isVisitor ? theme.colors.text : '#ffffff' },
+                        ]}
+                      >
+                        {message.content}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {!isVisitor ? (
+                    <View style={[
+                      styles.chatAvatarSmall,
+                      {
+                        backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22',
+                        borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44',
+                      },
+                    ]}>
+                      <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Reply box — only shown in takeover mode */}
+        {selectedSession.is_human_takeover ? (
+          <View style={[styles.replyBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <TextInput
+              style={[styles.replyInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+              placeholder="Type your reply..."
+              placeholderTextColor={theme.colors.subtle}
+              value={replyText}
+              onChangeText={setReplyText}
+              multiline
+              maxLength={2000}
+            />
+            <Pressable
+              style={[
+                styles.replySendBtn,
+                {
+                  backgroundColor: replyText.trim() && !sendingMessage ? theme.colors.primary : theme.colors.subtle,
+                },
+              ]}
+              disabled={!replyText.trim() || sendingMessage}
+              onPress={handleSendMessage}
+            >
+              {sendingMessage
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="send" size={18} color="#fff" />
+              }
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={[styles.takeoverCta, { backgroundColor: theme.colors.primary + '18', borderColor: theme.colors.primary + '40' }]}
+            onPress={handleTakeover}
+          >
+            <Ionicons name="hand-left-outline" size={16} color={theme.colors.primary} />
+            <Text style={[styles.takeoverCtaText, { color: theme.colors.primary }]}>
+              Tap to take over and reply as yourself
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
+
+  // Session list view
+  const liveCount = sessions.filter((s) => s.is_human_takeover).length;
+
+  return (
+    <View style={styles.sectionColumn}>
+      {/* Header */}
+      <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={{ gap: 4 }}>
+          <Text style={[styles.sessionsHeaderTitle, { color: theme.colors.text }]}>Live Sessions</Text>
+          <Text style={[styles.sessionsHeaderSub, { color: theme.colors.muted }]}>
+            {sessions.length === 0 ? 'No active sessions' : `${sessions.length} session${sessions.length === 1 ? '' : 's'}${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
+          </Text>
+        </View>
+        {liveCount > 0 ? (
+          <View style={[styles.liveChip, { backgroundColor: '#4ade8022', borderColor: '#4ade8055' }]}>
+            <View style={styles.liveDot} />
+            <Text style={[styles.liveChipText, { color: '#4ade80' }]}>{liveCount} Live</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {sessions.length === 0 ? (
+        <View style={[styles.sessionsEmpty, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.subtle} />
+          <Text style={[styles.sessionsEmptyTitle, { color: theme.colors.text }]}>No sessions yet</Text>
+          <Text style={[styles.sessionsEmptyBody, { color: theme.colors.muted }]}>
+            Sessions appear here as soon as visitors start chatting on your widget.
+          </Text>
+        </View>
+      ) : (
+        sessions.map((session) => {
+          const isLive = session.is_human_takeover;
+          const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
+          const preview = session.first_message || session.page_url || 'No preview';
+
+          return (
+            <Pressable
+              key={session.id}
+              style={[
+                styles.sessionCard,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: isLive ? theme.colors.primary + '60' : theme.colors.border,
+                },
+                isLive && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+              ]}
+              onPress={() => openSession(session)}
+            >
+              <View style={styles.sessionCardLeft}>
+                <View style={[
+                  styles.sessionCardAvatar,
+                  { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+                ]}>
+                  <Ionicons name="person" size={18} color={isLive ? theme.colors.primary : theme.colors.muted} />
+                  {isLive ? <View style={styles.sessionCardLiveDot} /> : null}
+                </View>
+              </View>
+
+              <View style={styles.sessionCardBody}>
+                <View style={styles.sessionCardTopRow}>
+                  <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                    {visitorName}
+                  </Text>
+                  <View style={[
+                    styles.sessionCardBadge,
+                    { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+                  ]}>
+                    <Text style={[styles.sessionCardBadgeText, { color: isLive ? theme.colors.primary : theme.colors.muted }]}>
+                      {isLive ? 'You\'re live' : `${session.message_count} msgs`}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+                  {preview}
+                </Text>
+                {session.page_url ? (
+                  <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]} numberOfLines={1}>
+                    {session.page_url}
+                  </Text>
+                ) : null}
+              </View>
+
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
+            </Pressable>
+          );
+        })
+      )}
     </View>
   );
 }
@@ -1081,257 +1196,217 @@ function LeadsTab({
   );
 }
 
+const WEB_APP_URL = 'https://app.zaochat.com';
+
+const STATUS_COLORS: Record<string, string> = {
+  ready: '#4ade80',
+  processing: '#fbbf24',
+  queued: '#60a5fa',
+  failed: '#f87171',
+  draft: '#9ca3af',
+};
+
+const FALLBACK_META: MobilePaginatedKnowledge['meta'] = {
+  current_page: 1,
+  last_page: 1,
+  per_page: 25,
+  total: 0,
+  has_more: false,
+};
+
 function KnowledgeTab({
-  sources,
+  initialSources,
+  initialMeta,
   token,
-  onSourcesChange,
 }: {
-  sources: MobileKnowledgeSource[];
+  initialSources: MobileKnowledgeSource[];
+  initialMeta: MobilePaginatedKnowledge['meta'] | undefined;
   token: string;
-  onSourcesChange: (sources: MobileKnowledgeSource[]) => void;
 }) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
-  const [sourceType, setSourceType] = useState<'manual' | 'url' | 'file'>('manual');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
-  const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [workingId, setWorkingId] = useState<number | null>(null);
+
+  const [sources, setSources] = useState<MobileKnowledgeSource[]>(initialSources ?? []);
+  const [meta, setMeta] = useState<MobilePaginatedKnowledge['meta']>(initialMeta ?? { ...FALLBACK_META, total: (initialSources ?? []).length });
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  async function handlePickFile(): Promise<void> {
+  async function loadPage(page: number): Promise<void> {
+    setLoadingPage(true);
     setError(null);
-    setSuccess(null);
-
-    const result = await DocumentPicker.getDocumentAsync({
-      multiple: false,
-      copyToCacheDirectory: true,
-      type: [
-        'application/pdf',
-        'text/plain',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      ],
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    setSelectedFile(result.assets[0] ?? null);
-  }
-
-  async function handleCreate(): Promise<void> {
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-
     try {
-      const created = await createKnowledgeSource(token, {
-        title,
-        source_type: sourceType,
-        content: sourceType === 'manual' ? content : undefined,
-        source_url: sourceType === 'url' ? sourceUrl : undefined,
-        source_file: sourceType === 'file' ? selectedFile : undefined,
-      });
-
-      onSourcesChange([created, ...sources]);
-      setTitle('');
-      setContent('');
-      setSourceUrl('');
-      setSelectedFile(null);
-      setSuccess('Knowledge source created.');
+      const result = await fetchKnowledgePage(token, page);
+      setSources(result.knowledge_sources);
+      setMeta(result.meta);
     } catch (err) {
       setError(resolveErrorMessage(err));
     } finally {
-      setSubmitting(false);
+      setLoadingPage(false);
     }
   }
 
-  async function handleRetry(source: MobileKnowledgeSource): Promise<void> {
-    setWorkingId(source.id);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const updated = await retryKnowledgeSource(token, source.id);
-      onSourcesChange(sources.map((item) => (item.id === updated.id ? updated : item)));
-      setSuccess('Knowledge source queued again.');
-    } catch (err) {
-      setError(resolveErrorMessage(err));
-    } finally {
-      setWorkingId(null);
-    }
-  }
-
-  async function handleDelete(source: MobileKnowledgeSource): Promise<void> {
-    setWorkingId(source.id);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      await deleteKnowledgeSource(token, source.id);
-      onSourcesChange(sources.filter((item) => item.id !== source.id));
-      setSuccess('Knowledge source deleted.');
-    } catch (err) {
-      setError(resolveErrorMessage(err));
-    } finally {
-      setWorkingId(null);
-    }
-  }
+  const readyCount = sources.filter((s) => s.status === 'ready').length;
 
   return (
     <View style={styles.sectionColumn}>
-      <View
+      {/* Web callout */}
+      <Pressable
         style={[
-          styles.sectionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-          },
+          styles.knowledgeCallout,
+          { backgroundColor: theme.colors.primary + '14', borderColor: theme.colors.primary + '35' },
         ]}
+        onPress={() => Linking.openURL(WEB_APP_URL + '/knowledge')}
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Knowledge</Text>
-        <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-          Existing sources available to the chatbot memory layer. Mobile supports manual notes, URLs, and document uploads.
-        </Text>
+        <View style={[styles.knowledgeCalloutIcon, { backgroundColor: theme.colors.primary + '20' }]}>
+          <Ionicons name="desktop-outline" size={22} color={theme.colors.primary} />
+        </View>
+        <View style={styles.knowledgeCalloutCopy}>
+          <Text style={[styles.knowledgeCalloutTitle, { color: theme.colors.text }]}>
+            Manage on the web app
+          </Text>
+          <Text style={[styles.knowledgeCalloutBody, { color: theme.colors.muted }]}>
+            Add, edit, or delete sources from the web dashboard.
+          </Text>
+          <View style={styles.knowledgeCalloutLink}>
+            <Text style={[styles.knowledgeCalloutUrl, { color: theme.colors.primary }]}>
+              app.zaochat.com
+            </Text>
+            <Ionicons name="arrow-forward" size={12} color={theme.colors.primary} />
+          </View>
+        </View>
+      </Pressable>
+
+      {/* Summary bar */}
+      <View
+        style={[styles.sectionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Knowledge base</Text>
+        {meta.total === 0 ? (
+          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
+            No sources yet. Visit the web app to add your first document or URL.
+          </Text>
+        ) : (
+          <View style={styles.knowledgeStatsRow}>
+            <View style={styles.knowledgeStat}>
+              <Text style={[styles.knowledgeStatNum, { color: theme.colors.text }]}>{meta.total}</Text>
+              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Total</Text>
+            </View>
+            <View style={[styles.knowledgeStatDivider, { backgroundColor: theme.colors.border }]} />
+            <View style={styles.knowledgeStat}>
+              <Text style={[styles.knowledgeStatNum, { color: '#4ade80' }]}>{readyCount}</Text>
+              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Ready</Text>
+            </View>
+            <View style={[styles.knowledgeStatDivider, { backgroundColor: theme.colors.border }]} />
+            <View style={styles.knowledgeStat}>
+              <Text style={[styles.knowledgeStatNum, { color: theme.colors.text }]}>
+                {meta.last_page > 1 ? `${meta.current_page}/${meta.last_page}` : '—'}
+              </Text>
+              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Page</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {error ? <ErrorBanner text={error} /> : null}
-      {success ? <SuccessBanner text={success} /> : null}
 
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Add knowledge source</Text>
-
-        <ChoiceRow
-          label="Source type"
-          value={sourceType}
-          options={['manual', 'url', 'file']}
-          onChange={(value) => setSourceType(value as 'manual' | 'url' | 'file')}
-        />
-
-        <Field
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Pricing FAQ"
-        />
-
-        {sourceType === 'manual' ? (
-          <Field
-            label="Content"
-            value={content}
-            onChangeText={setContent}
-            placeholder="Paste the knowledge content here"
-            multiline
-          />
-        ) : sourceType === 'url' ? (
-          <Field
-            label="Source URL"
-            value={sourceUrl}
-            onChangeText={setSourceUrl}
-            placeholder="https://example.com/faq"
-            autoCapitalize="none"
-          />
-        ) : (
-          <View style={styles.filePickerBlock}>
-            <Text style={[styles.fieldLabel, { color: theme.colors.muted }]}>Source file</Text>
-            <Pressable
-              style={[
-                styles.secondaryButton,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  opacity: submitting ? 0.7 : 1,
-                },
-              ]}
-              disabled={submitting}
-              onPress={handlePickFile}
-            >
-              <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>
-                {selectedFile ? 'Change File' : 'Choose File'}
+      {/* Source list */}
+      {sources.map((source) => (
+        <View
+          key={source.id}
+          style={[
+            styles.knowledgeItem,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+          ]}
+        >
+          <View style={styles.knowledgeItemHeader}>
+            <View style={[styles.knowledgeTypeTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Ionicons
+                name={source.source_type === 'url' ? 'link-outline' : source.source_type === 'file' ? 'document-outline' : 'create-outline'}
+                size={12}
+                color={theme.colors.muted}
+              />
+              <Text style={[styles.knowledgeTypeText, { color: theme.colors.muted }]}>
+                {capitalize(source.source_type)}
               </Text>
-            </Pressable>
-            <Text style={[styles.filePickerMeta, { color: theme.colors.muted }]}>
-              {selectedFile ? selectedFile.name : 'PDF, TXT, DOC, or DOCX'}
+            </View>
+            <View style={[styles.knowledgeStatusDot, { backgroundColor: STATUS_COLORS[source.status] ?? '#9ca3af' }]} />
+            <Text style={[styles.knowledgeStatusText, { color: STATUS_COLORS[source.status] ?? theme.colors.muted }]}>
+              {capitalize(source.status)}
             </Text>
           </View>
-        )}
 
-        <Pressable
-          style={[
-            styles.fullWidthPrimaryButton,
-            { backgroundColor: theme.colors.primary, opacity: submitting ? 0.7 : 1 },
-          ]}
-          disabled={
-            submitting ||
-            !title ||
-            (sourceType === 'manual' ? !content : sourceType === 'url' ? !sourceUrl : !selectedFile)
-          }
-          onPress={handleCreate}
-        >
-          <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
-            {submitting ? 'Creating...' : 'Create Knowledge Source'}
+          <Text style={[styles.knowledgeItemTitle, { color: theme.colors.text }]} numberOfLines={2}>
+            {source.title}
           </Text>
-        </Pressable>
-      </View>
 
-      {sources.map((source) => (
-        <View key={source.id}>
-          <CardRow
-            title={source.title}
-            subtitle={`${capitalize(source.source_type)} source · ${source.chunk_count} chunks`}
-            meta={capitalize(source.status)}
-          />
-          <View style={styles.knowledgeActions}>
-            {source.status === 'failed' ? (
-              <Pressable
-                style={[
-                  styles.inlineActionButton,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: theme.colors.border,
-                    opacity: workingId === source.id ? 0.65 : 1,
-                  },
-                ]}
-                disabled={workingId === source.id}
-                onPress={() => handleRetry(source)}
-              >
-                <Text style={[styles.inlineActionText, { color: theme.colors.accent }]}>
-                  {workingId === source.id ? 'Working...' : 'Retry'}
-                </Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={[
-                styles.inlineActionButton,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                  opacity: workingId === source.id ? 0.65 : 1,
-                },
-              ]}
-              disabled={workingId === source.id}
-              onPress={() => handleDelete(source)}
-            >
-              <Text style={[styles.inlineActionText, { color: '#fca5a5' }]}>
-                {workingId === source.id ? 'Working...' : 'Delete'}
+          {source.source_url ? (
+            <Text style={[styles.knowledgeItemMeta, { color: theme.colors.muted }]} numberOfLines={1}>
+              {source.source_url}
+            </Text>
+          ) : source.file_name ? (
+            <Text style={[styles.knowledgeItemMeta, { color: theme.colors.muted }]} numberOfLines={1}>
+              {source.file_name}
+            </Text>
+          ) : null}
+
+          <View style={styles.knowledgeItemFooter}>
+            <Text style={[styles.knowledgeItemChunks, { color: theme.colors.subtle }]}>
+              {source.chunk_count} chunk{source.chunk_count === 1 ? '' : 's'}
+            </Text>
+            {source.last_synced_at ? (
+              <Text style={[styles.knowledgeItemChunks, { color: theme.colors.subtle }]}>
+                Synced {new Date(source.last_synced_at).toLocaleDateString()}
               </Text>
-            </Pressable>
+            ) : null}
+            {source.processing_error ? (
+              <Text style={[styles.knowledgeItemChunks, { color: '#f87171' }]} numberOfLines={1}>
+                {source.processing_error}
+              </Text>
+            ) : null}
           </View>
         </View>
       ))}
+
+      {/* Pagination controls */}
+      {meta.last_page > 1 ? (
+        <View style={styles.paginationRow}>
+          <Pressable
+            style={[
+              styles.pageButton,
+              {
+                backgroundColor: meta.current_page <= 1 ? theme.colors.surface : theme.colors.card,
+                borderColor: theme.colors.border,
+                opacity: meta.current_page <= 1 || loadingPage ? 0.4 : 1,
+              },
+            ]}
+            disabled={meta.current_page <= 1 || loadingPage}
+            onPress={() => loadPage(meta.current_page - 1)}
+          >
+            <Ionicons name="chevron-back" size={16} color={theme.colors.text} />
+            <Text style={[styles.pageButtonText, { color: theme.colors.text }]}>Prev</Text>
+          </Pressable>
+
+          <Text style={[styles.pageIndicator, { color: theme.colors.muted }]}>
+            {loadingPage ? 'Loading...' : `${meta.current_page} of ${meta.last_page}`}
+          </Text>
+
+          <Pressable
+            style={[
+              styles.pageButton,
+              {
+                backgroundColor: !meta.has_more ? theme.colors.surface : theme.colors.card,
+                borderColor: theme.colors.border,
+                opacity: !meta.has_more || loadingPage ? 0.4 : 1,
+              },
+            ]}
+            disabled={!meta.has_more || loadingPage}
+            onPress={() => loadPage(meta.current_page + 1)}
+          >
+            <Text style={[styles.pageButtonText, { color: theme.colors.text }]}>Next</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.text} />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1356,6 +1431,14 @@ function SettingsTab({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     setForm(settings.widget);
   }, [settings.widget]);
@@ -1376,38 +1459,135 @@ function SettingsTab({
     }
   }
 
+  async function handleChangePassword(): Promise<void> {
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+
+    setSavingPassword(true);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    try {
+      await changePassword(token, currentPassword, newPassword, confirmPassword);
+      setPasswordSuccess('Password changed successfully.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordForm(false);
+    } catch (err) {
+      setPasswordError(resolveErrorMessage(err));
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
   return (
     <View style={styles.sectionColumn}>
+      {/* Profile card */}
       <View
         style={[
           styles.sectionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-          },
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
         ]}
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Settings</Text>
-        <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-          Save widget presentation changes back to the Laravel client record.
-        </Text>
+        <View style={styles.profileRow}>
+          <View style={[styles.profileAvatar, { backgroundColor: theme.colors.primary + '22' }]}>
+            <Ionicons name="person" size={26} color={theme.colors.primary} />
+          </View>
+          <View style={styles.profileCopy}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              {userContext.user.name}
+            </Text>
+            <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
+              {userContext.user.email}
+            </Text>
+          </View>
+        </View>
+
+        <Pressable
+          style={[
+            styles.editProfileButton,
+            { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+          ]}
+          onPress={() => {
+            setShowPasswordForm((v) => !v);
+            setPasswordError(null);
+            setPasswordSuccess(null);
+          }}
+        >
+          <Ionicons
+            name={showPasswordForm ? 'chevron-up' : 'lock-closed-outline'}
+            size={16}
+            color={theme.colors.accent}
+          />
+          <Text style={[styles.editProfileButtonText, { color: theme.colors.accent }]}>
+            {showPasswordForm ? 'Cancel' : 'Change Password'}
+          </Text>
+        </Pressable>
+
+        {showPasswordForm ? (
+          <View style={styles.passwordForm}>
+            {passwordError ? <ErrorBanner text={passwordError} /> : null}
+            {passwordSuccess ? <SuccessBanner text={passwordSuccess} /> : null}
+
+            <Field
+              label="Current password"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              placeholder="Enter current password"
+              secureTextEntry
+            />
+            <Field
+              label="New password"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="At least 8 characters"
+              secureTextEntry
+            />
+            <Field
+              label="Confirm new password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Repeat new password"
+              secureTextEntry
+            />
+
+            <Pressable
+              style={[
+                styles.fullWidthPrimaryButton,
+                {
+                  backgroundColor: theme.colors.primary,
+                  opacity: savingPassword || !currentPassword || !newPassword || !confirmPassword ? 0.6 : 1,
+                },
+              ]}
+              disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+              onPress={handleChangePassword}
+            >
+              <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
+                {savingPassword ? 'Saving...' : 'Update Password'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       {error ? <ErrorBanner text={error} /> : null}
       {success ? <SuccessBanner text={success} /> : null}
 
+      {/* Widget settings card */}
       <View
         style={[
           styles.sectionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-          },
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
         ]}
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-          {userContext.client.name}
-        </Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Widget settings</Text>
         <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
           {settings.client.contact_email || userContext.user.email}
         </Text>
@@ -1759,47 +1939,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   tabBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 14,
     flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: 28,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    paddingTop: 12,
+    paddingBottom: 20,
+    paddingHorizontal: 8,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    gap: 7,
-    borderWidth: 1,
+    gap: 4,
   },
-  tabIconWrap: {
-    width: 28,
-    height: 28,
+  tabIconPill: {
+    width: 52,
+    height: 32,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
-  tabIconText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-  },
-  tabButtonText: {
-    fontFamily: 'Inter_600SemiBold',
+  tabLabel: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 10,
+    letterSpacing: 0.1,
   },
   loader: {
     flex: 1,
@@ -1862,7 +2023,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 120,
+    paddingBottom: 32,
     gap: 18,
   },
   sectionColumn: {
@@ -2131,8 +2292,301 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  messagesColumn: {
+  // Session list
+  sessionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 18,
+  },
+  sessionsHeaderTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+  },
+  sessionsHeaderSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+  },
+  liveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#4ade80',
+  },
+  liveChipText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+  },
+  sessionsEmpty: {
+    alignItems: 'center',
     gap: 10,
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 40,
+  },
+  sessionsEmptyTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+  },
+  sessionsEmptyBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  sessionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+  },
+  sessionCardLeft: {
+    flexShrink: 0,
+  },
+  sessionCardAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sessionCardLiveDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 999,
+    backgroundColor: '#4ade80',
+    borderWidth: 2,
+    borderColor: '#07070f',
+  },
+  sessionCardBody: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  sessionCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  sessionCardName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    flex: 1,
+  },
+  sessionCardBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    flexShrink: 0,
+  },
+  sessionCardBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+  },
+  sessionCardPreview: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sessionCardUrl: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+  },
+  // Thread / chat view
+  threadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 12,
+  },
+  threadBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
+  },
+  threadBackText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  threadHeaderCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+  },
+  threadAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  threadHeaderName: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  threadHeaderMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+  },
+  takeoverPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
+  takeoverPillText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+  },
+  takeoverBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  takeoverBannerText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    flex: 1,
+  },
+  threadLoadingWrap: {
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 32,
+  },
+  threadLoadingText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+  },
+  threadEmptyWrap: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 40,
+  },
+  threadEmptyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+  },
+  messagesColumn: {
+    gap: 12,
+  },
+  chatBubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  chatBubbleRowLeft: {
+    justifyContent: 'flex-start',
+  },
+  chatBubbleRowRight: {
+    justifyContent: 'flex-end',
+  },
+  chatAvatarSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  chatSenderLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chatBubble: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  chatBubbleVisitor: {
+    borderBottomLeftRadius: 4,
+  },
+  chatBubbleAI: {
+    borderBottomRightRadius: 4,
+  },
+  chatBubbleHuman: {
+    borderBottomRightRadius: 4,
+  },
+  chatBubbleText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  replyBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 10,
+  },
+  replyInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+  },
+  replySendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  takeoverCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  takeoverCtaText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
   },
   messageBubble: {
     borderWidth: 1,
@@ -2164,12 +2618,142 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  knowledgeActions: {
+  knowledgeCallout: {
     flexDirection: 'row',
+    gap: 14,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+  },
+  knowledgeCalloutIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  knowledgeCalloutCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  knowledgeCalloutTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
+  knowledgeCalloutBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  knowledgeCalloutLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  knowledgeCalloutUrl: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  knowledgeStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+  },
+  knowledgeStat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  knowledgeStatNum: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+  },
+  knowledgeStatLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  knowledgeStatDivider: {
+    width: 1,
+    height: 32,
+    marginHorizontal: 4,
+  },
+  knowledgeItem: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
     gap: 8,
-    marginTop: 8,
-    marginLeft: 22,
+  },
+  knowledgeItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  knowledgeTypeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  knowledgeTypeText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  knowledgeStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    marginLeft: 4,
+  },
+  knowledgeStatusText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  knowledgeItemTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  knowledgeItemMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  knowledgeItemFooter: {
+    flexDirection: 'row',
+    gap: 10,
     flexWrap: 'wrap',
+  },
+  knowledgeItemChunks: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  pageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pageButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  pageIndicator: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
   },
   statusRow: {
     flexDirection: 'row',
@@ -2221,5 +2805,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 4,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  profileAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginTop: 4,
+  },
+  editProfileButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  passwordForm: {
+    gap: 12,
+    marginTop: 4,
   },
 });

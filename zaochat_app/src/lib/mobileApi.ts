@@ -139,12 +139,24 @@ export type MobileDashboard = {
   };
 };
 
+export type MobilePaginatedKnowledge = {
+  knowledge_sources: MobileKnowledgeSource[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    has_more: boolean;
+  };
+};
+
 export type MobileAppBootstrap = {
   me: MobileUserContext;
   dashboard: MobileDashboard;
   sessions: MobileSession[];
   leads: MobileLead[];
   knowledgeSources: MobileKnowledgeSource[];
+  knowledgeMeta: MobilePaginatedKnowledge['meta'];
   settings: MobileSettingsPayload;
 };
 
@@ -175,22 +187,47 @@ export async function logout(token: string): Promise<void> {
 }
 
 export async function loadMobileAppData(token: string): Promise<MobileAppBootstrap> {
-  const [me, dashboard, sessions, leads, knowledgeSources, settings] = await Promise.all([
+  const [me, dashboard, sessions, leads, knowledge, settings] = await Promise.all([
     request<MobileUserContext>('/me', { token }),
     request<MobileDashboard>('/dashboard', { token }),
     request<{ sessions: MobileSession[] }>('/sessions', { token }),
     request<{ leads: MobileLead[] }>('/leads', { token }),
-    request<{ knowledge_sources: MobileKnowledgeSource[] }>('/knowledge-sources', { token }),
+    request<MobilePaginatedKnowledge>('/knowledge-sources', { token }),
     request<MobileSettingsPayload>('/settings', { token }),
   ]);
+
+  const knowledgeSources = knowledge.knowledge_sources ?? [];
+  const knowledgeMeta: MobilePaginatedKnowledge['meta'] = knowledge.meta ?? {
+    current_page: 1,
+    last_page: 1,
+    per_page: 25,
+    total: knowledgeSources.length,
+    has_more: false,
+  };
 
   return {
     me,
     dashboard,
     sessions: sessions.sessions,
     leads: leads.leads,
-    knowledgeSources: knowledgeSources.knowledge_sources,
+    knowledgeSources,
+    knowledgeMeta,
     settings,
+  };
+}
+
+export async function fetchKnowledgePage(token: string, page: number): Promise<MobilePaginatedKnowledge> {
+  const raw = await request<any>(`/knowledge-sources?page=${page}`, { token });
+  const sources = raw.knowledge_sources ?? [];
+  return {
+    knowledge_sources: sources,
+    meta: raw.meta ?? {
+      current_page: page,
+      last_page: 1,
+      per_page: 25,
+      total: sources.length,
+      has_more: false,
+    },
   };
 }
 
@@ -296,6 +333,23 @@ export async function deleteKnowledgeSource(token: string, id: number): Promise<
   await request(`/knowledge-sources/${id}`, {
     method: 'DELETE',
     token,
+  });
+}
+
+export async function changePassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+  newPasswordConfirmation: string,
+): Promise<void> {
+  await request('/auth/password', {
+    method: 'PATCH',
+    token,
+    body: {
+      current_password: currentPassword,
+      password: newPassword,
+      password_confirmation: newPasswordConfirmation,
+    },
   });
 }
 
