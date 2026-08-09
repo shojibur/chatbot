@@ -33,7 +33,10 @@ import {
   loadMobileAppData,
   login as loginRequest,
   logout as logoutRequest,
+  releaseSessionTakeover,
   retryKnowledgeSource,
+  sendSessionMessage,
+  takeoverSession,
   updateLeadStatus,
   updateWidgetSettings,
   type MobileAppBootstrap,
@@ -510,7 +513,13 @@ function AppShell({
       {appError ? <ErrorBanner text={appError} inset /> : null}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {activeTab === 'sessions' ? <SessionsTab sessions={appData.sessions} token={token} /> : null}
+        {activeTab === 'sessions' ? (
+          <SessionsTab
+            sessions={appData.sessions}
+            token={token}
+            onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
+          />
+        ) : null}
         {activeTab === 'leads' ? (
           <LeadsTab
             leads={appData.leads}
@@ -566,18 +575,36 @@ function AppShell({
   );
 }
 
-function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: string }) {
+function SessionsTab({
+  sessions,
+  token,
+  onSessionsChange,
+}: {
+  sessions: MobileSession[];
+  token: string;
+  onSessionsChange: (sessions: MobileSession[]) => void;
+}) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
   const [selectedSession, setSelectedSession] = useState<MobileSession | null>(null);
   const [messages, setMessages] = useState<MobileSessionMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingTakeover, setSavingTakeover] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [replyText, setReplyText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  function syncSession(updated: MobileSession): void {
+    onSessionsChange(sessions.map((item) => (item.id === updated.id ? updated : item)));
+    setSelectedSession((current) => (current?.id === updated.id ? updated : current));
+  }
 
   async function openSession(session: MobileSession): Promise<void> {
     setSelectedSession(session);
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const data = await getSessionMessages(token, session.id);
@@ -590,6 +617,51 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
     }
   }
 
+  async function handleTakeover(): Promise<void> {
+    if (!selectedSession) return;
+
+    setSavingTakeover(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const updated = selectedSession.is_human_takeover
+        ? await releaseSessionTakeover(token, selectedSession.id)
+        : await takeoverSession(token, selectedSession.id);
+
+      syncSession(updated);
+      setSuccess(
+        updated.is_human_takeover
+          ? 'Human takeover is active for this session.'
+          : 'AI replies restored for this session.',
+      );
+    } catch (err) {
+      setError(resolveErrorMessage(err));
+    } finally {
+      setSavingTakeover(false);
+    }
+  }
+
+  async function handleSendMessage(): Promise<void> {
+    if (!selectedSession || !replyText.trim()) return;
+
+    setSendingMessage(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await sendSessionMessage(token, selectedSession.id, replyText.trim());
+      syncSession(response.session);
+      setMessages((current) => [...current, response.message]);
+      setReplyText('');
+      setSuccess('Reply sent to the session thread.');
+    } catch (err) {
+      setError(resolveErrorMessage(err));
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
   return (
     <View style={styles.sectionColumn}>
       <View style={styles.heroWrap}>
@@ -597,7 +669,7 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
         <Image source={logo} style={styles.homeLogo} resizeMode="contain" />
         <Text style={[styles.headline, { color: theme.colors.text }]}>Sessions</Text>
         <Text style={[styles.subhead, { color: theme.colors.muted }]}>
-          Tap a session to load full message history from the mobile API.
+          Review live threads, switch to human takeover, and send operator replies from mobile.
         </Text>
       </View>
 
@@ -606,7 +678,7 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
           <CardRow
             title={session.visitor_identifier || session.visitor_ip || 'Anonymous visitor'}
             subtitle={session.first_message || session.page_url || 'No preview available'}
-            meta={`${session.message_count} msgs`}
+            meta={session.is_human_takeover ? 'Human live' : `${session.message_count} msgs`}
           />
         </Pressable>
       ))}
@@ -624,10 +696,50 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Session detail'}
           </Text>
+          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
+            {selectedSession.is_human_takeover
+              ? 'AI is paused. Replies sent here will go out as the business operator.'
+              : 'AI is active. Use takeover before replying manually.'}
+          </Text>
+          <View style={styles.statusRow}>
+            <Pressable
+              style={[
+                styles.statusButton,
+                {
+                  backgroundColor: selectedSession.is_human_takeover
+                    ? theme.colors.primary
+                    : theme.colors.surface,
+                  borderColor: selectedSession.is_human_takeover
+                    ? theme.colors.primary
+                    : theme.colors.border,
+                  opacity: savingTakeover ? 0.7 : 1,
+                },
+              ]}
+              disabled={savingTakeover}
+              onPress={handleTakeover}
+            >
+              <Text
+                style={[
+                  styles.statusButtonText,
+                  {
+                    color: selectedSession.is_human_takeover
+                      ? theme.colors.primaryText
+                      : theme.colors.text,
+                  },
+                ]}
+              >
+                {savingTakeover
+                  ? 'Saving...'
+                  : selectedSession.is_human_takeover
+                    ? 'Release to AI'
+                    : 'Take Over'}
+              </Text>
+            </Pressable>
+          </View>
+          {error ? <ErrorBanner text={error} /> : null}
+          {success ? <SuccessBanner text={success} /> : null}
           {loading ? (
             <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>Loading messages...</Text>
-          ) : error ? (
-            <ErrorBanner text={error} />
           ) : (
             <View style={styles.messagesColumn}>
               {messages.map((message) => (
@@ -637,18 +749,38 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
                     styles.messageBubble,
                     {
                       backgroundColor:
-                        message.role === 'assistant' ? theme.colors.surface : theme.colors.primary,
-                      borderColor: message.role === 'assistant' ? theme.colors.border : theme.colors.primary,
+                        message.role === 'assistant'
+                          ? message.human_takeover
+                            ? theme.colors.card
+                            : theme.colors.surface
+                          : theme.colors.primary,
+                      borderColor:
+                        message.role === 'assistant'
+                          ? message.human_takeover
+                            ? theme.colors.accent
+                            : theme.colors.border
+                          : theme.colors.primary,
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.messageRole,
-                      { color: message.role === 'assistant' ? theme.colors.accent : theme.colors.primaryText },
+                      {
+                        color:
+                          message.role === 'assistant'
+                            ? message.human_takeover
+                              ? theme.colors.accent
+                              : theme.colors.accent
+                            : theme.colors.primaryText,
+                      },
                     ]}
                   >
-                    {message.role === 'assistant' ? 'AI' : 'Visitor'}
+                    {message.role === 'assistant'
+                      ? message.human_takeover
+                        ? message.sent_by_name || 'Human operator'
+                        : 'AI'
+                      : 'Visitor'}
                   </Text>
                   <Text
                     style={[
@@ -662,6 +794,28 @@ function SessionsTab({ sessions, token }: { sessions: MobileSession[]; token: st
               ))}
             </View>
           )}
+          <Field
+            label="Reply as business"
+            value={replyText}
+            onChangeText={setReplyText}
+            placeholder="Type the human reply"
+            multiline
+          />
+          <Pressable
+            style={[
+              styles.fullWidthPrimaryButton,
+              {
+                backgroundColor: theme.colors.primary,
+                opacity: sendingMessage || !replyText.trim() ? 0.7 : 1,
+              },
+            ]}
+            disabled={sendingMessage || !replyText.trim()}
+            onPress={handleSendMessage}
+          >
+            <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
+              {sendingMessage ? 'Sending...' : 'Send Human Reply'}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
     </View>

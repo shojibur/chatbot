@@ -70,6 +70,19 @@ class ChatController extends Controller
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
+        if ($chatSession->is_human_takeover) {
+            return response()->json([
+                'answer' => 'A human from the team has taken over this chat and will reply here shortly.',
+                'cached' => false,
+                'session_token' => $chatSession->session_token,
+                'assistant_message_id' => null,
+                'takeover_active' => true,
+                'lead_capture' => false,
+                'lead_trigger' => null,
+                'lead_capture_prompt' => null,
+            ]);
+        }
+
        /* $blockedCategory = $this->messagePolicyService->blockedCategory($message);
         if ($blockedCategory !== null) {
             $blockedAnswer = $this->messagePolicyService->blockedResponse($client);
@@ -124,12 +137,14 @@ class ChatController extends Controller
                     $cachedAnswer = trim(str_replace('[TRIGGER_LEAD]', '', $cachedAnswer));
                 }
 
-                $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
+                $assistantMessage = $this->chatHistoryService->logAssistantMessage($chatSession, $cachedAnswer, 0, true);
 
                 return response()->json([
                     'answer' => $cachedAnswer,
                     'cached' => true,
                     'session_token' => $chatSession->session_token,
+                    'assistant_message_id' => $assistantMessage->id,
+                    'takeover_active' => false,
                     'lead_capture' => false,
                     'lead_trigger' => null,
                     'lead_capture_prompt' => null,
@@ -245,16 +260,73 @@ class ChatController extends Controller
         $answer = trim($answer);
 
         // Log the assistant response to chat history (using the clean answer)
-        $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
+        $assistantMessage = $this->chatHistoryService->logAssistantMessage($chatSession, $answer, $totalTokens);
 
         return response()->json([
             'answer' => $answer,
             'cached' => false,
             'session_token' => $chatSession->session_token,
+            'assistant_message_id' => $assistantMessage->id,
+            'takeover_active' => false,
             'lead_capture' => false,
             'lead_trigger' => null,
             'lead_capture_prompt' => null,
             'lead_saved' => $leadPayload !== null,
+        ]);
+    }
+
+    public function sessionMessages(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'client_code' => ['required', 'string', 'max:100'],
+            'session_token' => ['required', 'string', 'max:64'],
+            'page_url' => ['nullable', 'string', 'max:2000'],
+            'after_message_id' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $client = Client::where('unique_code', $validated['client_code'])
+            ->where('status', 'active')
+            ->first();
+
+        if (! $client) {
+            return response()->json(['error' => 'Client not found or inactive.'], 404);
+        }
+
+        if (! $this->verifyDomainAccess($request, $client)) {
+            return response()->json(['error' => 'Domain not authorized to use this widget.'], 403);
+        }
+
+        $chatSession = $client->chatSessions()
+            ->where('session_token', $validated['session_token'])
+            ->first();
+
+        if (! $chatSession) {
+            return response()->json([
+                'messages' => [],
+                'takeover_active' => false,
+            ]);
+        }
+
+        $messagesQuery = $chatSession->messages()
+            ->where('role', 'assistant')
+            ->orderBy('id');
+
+        if (isset($validated['after_message_id'])) {
+            $messagesQuery->where('id', '>', $validated['after_message_id']);
+        }
+
+        $messages = $messagesQuery->get()->map(fn ($message) => [
+            'id' => $message->id,
+            'role' => $message->role,
+            'content' => $message->content,
+            'source' => (string) data_get($message->meta, 'source', 'ai'),
+            'sent_by_name' => data_get($message->meta, 'sent_by_name'),
+            'created_at' => $message->created_at?->toISOString(),
+        ]);
+
+        return response()->json([
+            'messages' => $messages,
+            'takeover_active' => (bool) $chatSession->is_human_takeover,
         ]);
     }
 

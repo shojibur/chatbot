@@ -221,8 +221,11 @@ interface WidgetConfig {
 }
 
 interface Message {
+    id?: number;
     role: 'user' | 'assistant';
     content: string;
+    source?: string;
+    sent_by_name?: string | null;
 }
 
 const props = defineProps<{
@@ -246,8 +249,10 @@ const storedMessages = sessionStorage.getItem('davey_messages');
 const messages = ref<Message[]>(storedMessages ? JSON.parse(storedMessages) : []);
 
 const sessionToken = ref<string | null>(sessionStorage.getItem('davey_session_token'));
+const lastMessageId = ref<number>(Number(sessionStorage.getItem('davey_last_message_id') || '0'));
 const isDarkMode = ref(false);
 let darkModeMedia: MediaQueryList | null = null;
+let pollTimer: number | null = null;
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#6366f1',
@@ -320,6 +325,91 @@ function saveMessages() {
     sessionStorage.setItem('davey_messages', JSON.stringify(messages.value));
 }
 
+function saveLastMessageId() {
+    sessionStorage.setItem('davey_last_message_id', String(lastMessageId.value));
+}
+
+function pushAssistantMessage(message: Message) {
+    if (message.id && messages.value.some((item) => item.id === message.id)) {
+        return;
+    }
+
+    const last = messages.value[messages.value.length - 1];
+    if (
+        !message.id &&
+        last?.role === 'assistant' &&
+        last.content === message.content
+    ) {
+        return;
+    }
+
+    messages.value.push(message);
+
+    if (message.id && message.id > lastMessageId.value) {
+        lastMessageId.value = message.id;
+        saveLastMessageId();
+    }
+
+    saveMessages();
+    scrollToBottom();
+}
+
+async function pollSessionMessages() {
+    if (!sessionToken.value) {
+        return;
+    }
+
+    try {
+        const url = new URL(`${props.apiBase}/api/v1/chat/session/messages`);
+        url.searchParams.set('client_code', props.clientCode);
+        url.searchParams.set('session_token', sessionToken.value);
+        url.searchParams.set('page_url', window.location.href);
+
+        if (lastMessageId.value > 0) {
+            url.searchParams.set('after_message_id', String(lastMessageId.value));
+        }
+
+        const res = await fetch(url.toString(), {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!res.ok) {
+            return;
+        }
+
+        const data = await res.json();
+
+        for (const message of data.messages ?? []) {
+            pushAssistantMessage({
+                id: message.id,
+                role: 'assistant',
+                content: message.content,
+                source: message.source,
+                sent_by_name: message.sent_by_name ?? null,
+            });
+        }
+    } catch {
+        // Ignore polling failures and let the next interval retry.
+    }
+}
+
+function startPolling() {
+    if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+    }
+
+    if (!sessionToken.value) {
+        return;
+    }
+
+    void pollSessionMessages();
+    pollTimer = window.setInterval(() => {
+        void pollSessionMessages();
+    }, 4000);
+}
+
 onMounted(() => {
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
         darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
@@ -340,6 +430,8 @@ onMounted(() => {
         messages.value.push({ role: 'assistant', content: welcome });
         saveMessages();
     }
+
+    startPolling();
 });
 
 onUnmounted(() => {
@@ -352,9 +444,14 @@ onUnmounted(() => {
     } else {
         darkModeMedia.removeListener(syncDarkModePreference);
     }
+
+    if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+    }
 });
 
 watch(themeMode, syncDarkModePreference);
+watch(sessionToken, startPolling);
 
 marked.setOptions({
     breaks: true,
@@ -419,28 +516,31 @@ async function send() {
 
         if (res.ok) {
             if (data.answer) {
-                messages.value.push({ role: 'assistant', content: data.answer });
-                saveMessages();
+                pushAssistantMessage({
+                    id: data.assistant_message_id ?? undefined,
+                    role: 'assistant',
+                    content: data.answer,
+                    source: data.takeover_active ? 'takeover_notice' : 'ai',
+                });
             }
 
             if (data.session_token) {
                 sessionToken.value = data.session_token;
                 sessionStorage.setItem('davey_session_token', data.session_token);
+                startPolling();
             }
 
         } else {
-            messages.value.push({
+            pushAssistantMessage({
                 role: 'assistant',
                 content: data.error || 'Sorry, something went wrong. Please try again.',
             });
-            saveMessages();
         }
     } catch {
-        messages.value.push({
+        pushAssistantMessage({
             role: 'assistant',
             content: 'Unable to connect. Please check your internet connection.',
         });
-        saveMessages();
     } finally {
         loading.value = false;
         scrollToBottom();

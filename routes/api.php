@@ -14,6 +14,9 @@ Route::prefix('v1')->group(function () {
     Route::post('chat', [ChatController::class, 'chat'])
         ->middleware('throttle:chat')
         ->name('api.chat');
+    Route::get('chat/session/messages', [ChatController::class, 'sessionMessages'])
+        ->middleware('throttle:120,1')
+        ->name('api.chat.session-messages');
 
     Route::get('widget-config/{clientCode}', [ChatController::class, 'widgetConfig'])
         ->middleware('throttle:120,1')
@@ -40,6 +43,9 @@ Route::prefix('mobile')->name('api.mobile.')->group(function () {
         Route::get('dashboard', MobileDashboardController::class)->name('dashboard');
         Route::get('sessions', [MobileSessionController::class, 'index'])->name('sessions.index');
         Route::get('sessions/{session}/messages', [MobileSessionController::class, 'messages'])->name('sessions.messages');
+        Route::post('sessions/{session}/takeover', [MobileSessionController::class, 'takeover'])->name('sessions.takeover');
+        Route::post('sessions/{session}/release', [MobileSessionController::class, 'releaseTakeover'])->name('sessions.release');
+        Route::post('sessions/{session}/messages', [MobileSessionController::class, 'sendMessage'])->name('sessions.send-message');
         Route::get('leads', [MobileLeadController::class, 'index'])->name('leads.index');
         Route::get('leads/{lead}', [MobileLeadController::class, 'show'])->name('leads.show');
         Route::patch('leads/{lead}/status', [MobileLeadController::class, 'updateStatus'])->name('leads.status');

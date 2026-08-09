@@ -23,6 +23,9 @@ class ChatSession extends Model
         'message_count',
         'total_tokens',
         'last_activity_at',
+        'is_human_takeover',
+        'taken_over_by_user_id',
+        'taken_over_at',
     ];
 
     /**
@@ -36,6 +39,8 @@ class ChatSession extends Model
             'message_count' => 'integer',
             'total_tokens' => 'integer',
             'last_activity_at' => 'datetime',
+            'is_human_takeover' => 'boolean',
+            'taken_over_at' => 'datetime',
         ];
     }
 
@@ -53,5 +58,10 @@ class ChatSession extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ChatMessage::class);
+    }
+
+    public function takenOverBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'taken_over_by_user_id');
     }
 }

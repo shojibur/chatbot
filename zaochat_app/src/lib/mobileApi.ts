@@ -12,6 +12,9 @@ export type MobileSession = {
   last_activity_at: string | null;
   created_at: string | null;
   first_message: string | null;
+  is_human_takeover: boolean;
+  taken_over_by_user_id: number | null;
+  taken_over_at: string | null;
 };
 
 export type MobileSessionMessage = {
@@ -20,6 +23,9 @@ export type MobileSessionMessage = {
   content: string;
   token_count: number;
   from_cache: boolean;
+  source: string;
+  sent_by_name: string | null;
+  human_takeover: boolean;
   created_at: string | null;
 };
 
@@ -189,12 +195,42 @@ export async function loadMobileAppData(token: string): Promise<MobileAppBootstr
 }
 
 export async function getSessionMessages(token: string, sessionId: number): Promise<MobileSessionMessage[]> {
-  const response = await request<{ session_id: number; messages: MobileSessionMessage[] }>(
+  const response = await request<{ session_id: number; session: MobileSession; messages: MobileSessionMessage[] }>(
     `/sessions/${sessionId}/messages`,
     { token },
   );
 
   return response.messages;
+}
+
+export async function takeoverSession(token: string, sessionId: number): Promise<MobileSession> {
+  const response = await request<{ session: MobileSession }>(`/sessions/${sessionId}/takeover`, {
+    method: 'POST',
+    token,
+  });
+
+  return response.session;
+}
+
+export async function releaseSessionTakeover(token: string, sessionId: number): Promise<MobileSession> {
+  const response = await request<{ session: MobileSession }>(`/sessions/${sessionId}/release`, {
+    method: 'POST',
+    token,
+  });
+
+  return response.session;
+}
+
+export async function sendSessionMessage(
+  token: string,
+  sessionId: number,
+  content: string,
+): Promise<{ session: MobileSession; message: MobileSessionMessage }> {
+  return request<{ session: MobileSession; message: MobileSessionMessage }>(`/sessions/${sessionId}/messages`, {
+    method: 'POST',
+    token,
+    body: { content, send_as: 'assistant' },
+  });
 }
 
 export async function updateLeadStatus(

@@ -126,8 +126,11 @@ interface WidgetConfig {
 }
 
 interface Message {
+    id?: number;
     role: 'user' | 'assistant';
     content: string;
+    source?: string;
+    sent_by_name?: string | null;
 }
 
 const props = defineProps<{
@@ -146,9 +149,12 @@ let darkModeMedia: MediaQueryList | null = null;
 const storagePrefix = `davey_iframe_${props.clientCode}`;
 const messagesStorageKey = `${storagePrefix}_messages`;
 const sessionStorageKey = `${storagePrefix}_session_token`;
+const lastMessageIdStorageKey = `${storagePrefix}_last_message_id`;
 
 const messages = ref<Message[]>(readMessages());
 const sessionToken = ref<string | null>(readStorage(sessionStorageKey));
+const lastMessageId = ref<number>(Number(readStorage(lastMessageIdStorageKey) || '0'));
+let pollTimer: number | null = null;
 
 const primaryColor = computed(
     () => props.config.widget_settings?.primary_color || '#1f2937',
@@ -197,6 +203,8 @@ onMounted(() => {
         messages.value.push({ role: 'assistant', content: welcome });
         saveMessages();
     }
+
+    startPolling();
 });
 
 onUnmounted(() => {
@@ -209,9 +217,14 @@ onUnmounted(() => {
     } else {
         darkModeMedia.removeListener(syncDarkModePreference);
     }
+
+    if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+    }
 });
 
 watch(themeMode, syncDarkModePreference);
+watch(sessionToken, startPolling);
 
 marked.setOptions({
     breaks: true,
@@ -250,6 +263,10 @@ function saveMessages() {
     writeStorage(messagesStorageKey, JSON.stringify(messages.value));
 }
 
+function saveLastMessageId() {
+    writeStorage(lastMessageIdStorageKey, String(lastMessageId.value));
+}
+
 function parseMessage(text: string) {
     if (!text) return '';
 
@@ -279,10 +296,86 @@ function syncDarkModePreference() {
     isDarkMode.value = !!darkModeMedia?.matches;
 }
 
-function addBotMessage(content: string) {
-    messages.value.push({ role: 'assistant', content });
+function addBotMessage(message: Message | string) {
+    const normalized = typeof message === 'string'
+        ? { role: 'assistant' as const, content: message }
+        : message;
+
+    if (
+        normalized.id &&
+        messages.value.some((item) => item.id === normalized.id)
+    ) {
+        return;
+    }
+
+    const last = messages.value[messages.value.length - 1];
+    if (
+        !normalized.id &&
+        last?.role === 'assistant' &&
+        last.content === normalized.content
+    ) {
+        return;
+    }
+
+    messages.value.push(normalized);
+
+    if (normalized.id && normalized.id > lastMessageId.value) {
+        lastMessageId.value = normalized.id;
+        saveLastMessageId();
+    }
+
     saveMessages();
     scrollToBottom();
+}
+
+async function pollSessionMessages() {
+    if (!sessionToken.value) return;
+
+    try {
+        const url = new URL(`${props.apiBase}/api/v1/chat/session/messages`);
+        url.searchParams.set('client_code', props.clientCode);
+        url.searchParams.set('session_token', sessionToken.value);
+        url.searchParams.set('page_url', props.parentPageUrl || window.location.href);
+
+        if (lastMessageId.value > 0) {
+            url.searchParams.set('after_message_id', String(lastMessageId.value));
+        }
+
+        const res = await fetch(url.toString(), {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        for (const message of data.messages ?? []) {
+            addBotMessage({
+                id: message.id,
+                role: 'assistant',
+                content: message.content,
+                source: message.source,
+                sent_by_name: message.sent_by_name ?? null,
+            });
+        }
+    } catch {
+        // Ignore polling failures and retry next interval.
+    }
+}
+
+function startPolling() {
+    if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+    }
+
+    if (!sessionToken.value) return;
+
+    void pollSessionMessages();
+    pollTimer = window.setInterval(() => {
+        void pollSessionMessages();
+    }, 4000);
 }
 
 async function send() {
@@ -320,28 +413,25 @@ async function send() {
 
         if (res.ok) {
             if (data.answer) {
-                messages.value.push({ role: 'assistant', content: data.answer });
-                saveMessages();
+                addBotMessage({
+                    id: data.assistant_message_id ?? undefined,
+                    role: 'assistant',
+                    content: data.answer,
+                    source: data.takeover_active ? 'takeover_notice' : 'ai',
+                });
             }
 
             if (data.session_token) {
                 sessionToken.value = data.session_token;
                 writeStorage(sessionStorageKey, data.session_token);
+                startPolling();
             }
 
         } else {
-            messages.value.push({
-                role: 'assistant',
-                content: data.error || 'Something went wrong. Please try again.',
-            });
-            saveMessages();
+            addBotMessage(data.error || 'Something went wrong. Please try again.');
         }
     } catch {
-        messages.value.push({
-            role: 'assistant',
-            content: 'Unable to connect. Please check your internet connection.',
-        });
-        saveMessages();
+        addBotMessage('Unable to connect. Please check your internet connection.');
     } finally {
         loading.value = false;
         scrollToBottom();
