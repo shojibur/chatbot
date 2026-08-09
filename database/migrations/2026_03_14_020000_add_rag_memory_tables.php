@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    private function supportsPgVector(): bool
+    {
+        return DB::connection()->getPdo()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'pgsql';
+    }
+
     /**
      * Run the migrations.
      */
@@ -67,7 +72,7 @@ return new class extends Migration
             $table->index(['client_id', 'question_hash']);
         });
 
-        if (DB::connection()->getDriverName() === 'pgsql') {
+        if ($this->supportsPgVector()) {
             DB::statement('CREATE EXTENSION IF NOT EXISTS vector');
             DB::statement('ALTER TABLE knowledge_chunks ADD COLUMN embedding_vector vector(1536)');
             DB::statement('ALTER TABLE conversation_caches ADD COLUMN question_embedding_vector vector(1536)');
@@ -79,7 +84,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        if (DB::getDriverName() === 'pgsql') {
+        if ($this->supportsPgVector()) {
             DB::statement('ALTER TABLE conversation_caches DROP COLUMN IF EXISTS question_embedding_vector');
             DB::statement('ALTER TABLE knowledge_chunks DROP COLUMN IF EXISTS embedding_vector');
         }
