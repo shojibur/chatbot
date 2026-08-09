@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -8,6 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import * as DocumentPicker from 'expo-document-picker';
+import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
@@ -16,7 +16,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -25,6 +24,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   createKnowledgeSource,
   deleteKnowledgeSource,
@@ -55,6 +55,13 @@ const TOKEN_STORAGE_KEY = 'zaochat.mobile.auth_token';
 
 type Screen = 'splash' | 'onboarding' | 'login' | 'app';
 type Tab = 'sessions' | 'leads' | 'knowledge' | 'settings';
+
+const TAB_ITEMS: Array<{ key: Tab; label: string; glyph: string }> = [
+  { key: 'sessions', label: 'Sessions', glyph: 'S' },
+  { key: 'leads', label: 'Leads', glyph: 'L' },
+  { key: 'knowledge', label: 'Knowledge', glyph: 'K' },
+  { key: 'settings', label: 'Settings', glyph: 'G' },
+];
 
 export default function App() {
   const scheme = useColorScheme();
@@ -87,7 +94,7 @@ export default function App() {
     async function bootstrap(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
-      const storedToken = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      const storedToken = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
 
       if (!storedToken) {
         if (!cancelled) setScreen('onboarding');
@@ -108,7 +115,7 @@ export default function App() {
         setAppData(data);
         setScreen('app');
       } catch (error) {
-        await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+        await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
 
         if (cancelled) return;
 
@@ -130,6 +137,10 @@ export default function App() {
   }, [fontsLoaded]);
 
   async function handleLogin(): Promise<void> {
+    if (isSubmitting) {
+      return;
+    }
+
     setIsSubmitting(true);
     setLoginError(null);
     setAppError(null);
@@ -144,9 +155,9 @@ export default function App() {
       setActiveTab('sessions');
 
       if (rememberMe) {
-        await AsyncStorage.setItem(TOKEN_STORAGE_KEY, auth.token);
+        await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, auth.token);
       } else {
-        await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+        await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
       }
 
       setScreen('app');
@@ -183,7 +194,7 @@ export default function App() {
       }
     }
 
-    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
     setToken(null);
     setUserContext(null);
     setAppData(null);
@@ -202,41 +213,43 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.bg }]}>
-      <StatusBar style={theme.statusBar} />
-      {screen === 'splash' ? <SplashScreen /> : null}
-      {screen === 'onboarding' ? (
-        <OnboardingScreen onContinue={() => setScreen('login')} />
-      ) : null}
-      {screen === 'login' ? (
-        <LoginScreen
-          email={email}
-          password={password}
-          rememberMe={rememberMe}
-          isSubmitting={isSubmitting}
-          loginError={loginError}
-          onEmailChange={setEmail}
-          onPasswordChange={setPassword}
-          onRememberToggle={() => setRememberMe((value) => !value)}
-          onLogin={handleLogin}
-          onBack={() => setScreen('onboarding')}
-        />
-      ) : null}
-      {screen === 'app' && userContext && appData && token ? (
-        <AppShell
-          activeTab={activeTab}
-          appData={appData}
-          appError={appError}
-          appLoading={appLoading}
-          token={token}
-          onChangeTab={setActiveTab}
-          onDataChange={setAppData}
-          onLogout={handleLogout}
-          onRefresh={handleRefresh}
-          userContext={userContext}
-        />
-      ) : null}
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.bg }]}>
+        <StatusBar style={theme.statusBar} />
+        {screen === 'splash' ? <SplashScreen /> : null}
+        {screen === 'onboarding' ? (
+          <OnboardingScreen onContinue={() => setScreen('login')} />
+        ) : null}
+        {screen === 'login' ? (
+          <LoginScreen
+            email={email}
+            password={password}
+            rememberMe={rememberMe}
+            isSubmitting={isSubmitting}
+            loginError={loginError}
+            onEmailChange={setEmail}
+            onPasswordChange={setPassword}
+            onRememberToggle={() => setRememberMe((value) => !value)}
+            onLogin={handleLogin}
+            onBack={() => setScreen('onboarding')}
+          />
+        ) : null}
+        {screen === 'app' && userContext && appData && token ? (
+          <AppShell
+            activeTab={activeTab}
+            appData={appData}
+            appError={appError}
+            appLoading={appLoading}
+            token={token}
+            onChangeTab={setActiveTab}
+            onDataChange={setAppData}
+            onLogout={handleLogout}
+            onRefresh={handleRefresh}
+            userContext={userContext}
+          />
+        ) : null}
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -270,36 +283,18 @@ function OnboardingScreen({ onContinue }: { onContinue: () => void }) {
       <View style={styles.heroWrap}>
         <GlowBackground />
         <Image source={logo} style={styles.heroLogo} resizeMode="contain" />
-        <View
-          style={[
-            styles.badge,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <View style={[styles.badgeDot, { backgroundColor: theme.colors.success }]} />
-          <Text style={[styles.badgeText, { color: theme.colors.muted }]}>
-            Built from the live ZaoChat design system
-          </Text>
-        </View>
-
         <Text style={[styles.headline, { color: theme.colors.text }]}>
-          Run client conversations from anywhere.
+          Stay on top of every conversation.
         </Text>
         <Text style={[styles.subhead, { color: theme.colors.muted }]}>
-          Android-first mobile access for sessions, leads, takeover, widget controls,
-          knowledge, and subscription management.
+          Monitor chats, capture leads, and step in when a human reply matters.
         </Text>
-      </View>
-
-      <View style={styles.cardsColumn}>
-        {[
-          'Monitor every active conversation',
-          'Take over when timing matters',
-          'Manage the full client portal from mobile',
-        ].map((title, index) => (
+        <View style={styles.cardsColumn}>
+          {[
+            ['Live sessions', 'See active threads and recent messages fast.'],
+            ['Lead follow-up', 'Review leads and move quickly on high-intent visitors.'],
+            ['Human takeover', 'Pause AI and reply directly from your mobile device.'],
+          ].map(([title, body]) => (
           <View
             key={title}
             style={[
@@ -314,14 +309,11 @@ function OnboardingScreen({ onContinue }: { onContinue: () => void }) {
               {title}
             </Text>
             <Text style={[styles.onboardingCardBody, { color: theme.colors.muted }]}>
-              {index === 0
-                ? 'Watch live session queues, review the full thread, and spot hot leads before they cool down.'
-                : index === 1
-                  ? 'Switch from AI to human follow-up when a visitor is ready to book, buy, or needs a callback now.'
-                  : 'Leads, widget settings, knowledge sources, subscription, and testing stay within reach.'}
+              {body}
             </Text>
           </View>
-        ))}
+          ))}
+        </View>
       </View>
 
       <Pressable
@@ -332,7 +324,7 @@ function OnboardingScreen({ onContinue }: { onContinue: () => void }) {
         onPress={onContinue}
       >
         <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
-          Continue to Login
+          Sign In
         </Text>
       </Pressable>
     </ScrollView>
@@ -366,6 +358,7 @@ function LoginScreen({
 }: LoginProps) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
+  const canSubmit = Boolean(email.trim() && password.trim() && !isSubmitting);
 
   return (
     <KeyboardAvoidingView
@@ -378,8 +371,7 @@ function LoginScreen({
           Sign in to your client portal
         </Text>
         <Text style={[styles.loginSubtitle, { color: theme.colors.muted }]}>
-          Set `EXPO_PUBLIC_API_BASE_URL` to your Laravel server, for example
-          `http://10.0.2.2:8000/api/mobile` on the Android emulator.
+          Access sessions, leads, knowledge, and settings from one place.
         </Text>
 
         <View
@@ -433,13 +425,21 @@ function LoginScreen({
           <Pressable
             style={[
               styles.fullWidthPrimaryButton,
-              { backgroundColor: theme.colors.primary, opacity: isSubmitting ? 0.7 : 1 },
+              {
+                backgroundColor: canSubmit ? theme.colors.primary : theme.colors.subtle,
+                opacity: canSubmit ? 1 : 0.7,
+              },
             ]}
-            disabled={isSubmitting || !email || !password}
+            disabled={!canSubmit}
             onPress={onLogin}
           >
             {isSubmitting ? (
-              <ActivityIndicator color={theme.colors.primaryText} />
+              <View style={styles.buttonLoadingRow}>
+                <ActivityIndicator color={theme.colors.primaryText} />
+                <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
+                  Signing In...
+                </Text>
+              </View>
             ) : (
               <Text style={[styles.primaryButtonText, { color: theme.colors.primaryText }]}>
                 Sign In
@@ -453,6 +453,7 @@ function LoginScreen({
             </Text>
           </Pressable>
         </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -551,22 +552,45 @@ function AppShell({
           { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
         ]}
       >
-        {(['sessions', 'leads', 'knowledge', 'settings'] as const).map((tab) => (
+        {TAB_ITEMS.map((tab) => (
           <Pressable
-            key={tab}
+            key={tab.key}
             style={[
               styles.tabButton,
-              { backgroundColor: activeTab === tab ? theme.colors.primary : 'transparent' },
+              {
+                backgroundColor: activeTab === tab.key ? theme.colors.primary : 'transparent',
+                borderColor: activeTab === tab.key ? theme.colors.primary : 'transparent',
+              },
             ]}
-            onPress={() => onChangeTab(tab)}
+            onPress={() => onChangeTab(tab.key)}
           >
+            <View
+              style={[
+                styles.tabIconWrap,
+                {
+                  backgroundColor:
+                    activeTab === tab.key ? 'rgba(255,255,255,0.18)' : theme.colors.surface,
+                  borderColor:
+                    activeTab === tab.key ? 'rgba(255,255,255,0.12)' : theme.colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabIconText,
+                  { color: activeTab === tab.key ? theme.colors.primaryText : theme.colors.text },
+                ]}
+              >
+                {tab.glyph}
+              </Text>
+            </View>
             <Text
               style={[
                 styles.tabButtonText,
-                { color: activeTab === tab ? theme.colors.primaryText : theme.colors.muted },
+                { color: activeTab === tab.key ? theme.colors.primaryText : theme.colors.muted },
               ]}
             >
-              {tab === 'knowledge' ? 'Knowledge' : capitalize(tab)}
+              {tab.label}
             </Text>
           </Pressable>
         ))}
@@ -1735,23 +1759,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   tabBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 14,
     flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
+    borderWidth: 1,
+    borderRadius: 28,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 20,
+    paddingVertical: 10,
     paddingHorizontal: 8,
+    gap: 7,
+    borderWidth: 1,
+  },
+  tabIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  tabIconText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
   },
   tabButtonText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
+    fontSize: 10,
   },
   loader: {
     flex: 1,
@@ -1814,7 +1862,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 36,
+    paddingBottom: 120,
     gap: 18,
   },
   sectionColumn: {
@@ -2000,6 +2048,12 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontFamily: 'Inter_700Bold',
     fontSize: 14,
+  },
+  buttonLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   backButton: {
     alignItems: 'center',
