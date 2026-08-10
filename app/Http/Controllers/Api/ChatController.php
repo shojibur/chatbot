@@ -18,6 +18,7 @@ use App\Services\VisitorMessagePolicyService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -73,9 +74,16 @@ class ChatController extends Controller
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
+        $sessionCtx = [
+            'session_id' => $chatSession->id,
+            'client_id'  => $client->id,
+            'visitor_ip' => $chatSession->visitor_ip,
+        ];
+
         // Notify on truly new sessions — wasRecentlyCreated is true regardless of
         // whether a session_token was supplied (handles token mismatch case too).
         if ($chatSession->wasRecentlyCreated) {
+            Log::info('[Chat] New session created', $sessionCtx);
             $this->pushNotificationService->newSession($client);
         }
 
@@ -92,6 +100,12 @@ class ChatController extends Controller
             $lastHumanAt = $lastHumanMessage ? Carbon::parse($lastHumanMessage) : $chatSession->taken_over_at;
 
             if ($lastHumanAt->lt(now()->subMinutes(15))) {
+                Log::info('[Chat] Auto-releasing stale takeover', [
+                    ...$sessionCtx,
+                    'taken_over_at'    => $chatSession->taken_over_at,
+                    'last_human_reply' => $lastHumanAt,
+                ]);
+
                 $chatSession->forceFill([
                     'is_human_takeover' => false,
                     'taken_over_by_user_id' => null,
@@ -109,6 +123,7 @@ class ChatController extends Controller
             $answer = null;
 
             if (! $alreadyNotified) {
+                Log::info('[Chat] Sending takeover notice to visitor', $sessionCtx);
                 $answer = 'A human from the team has taken over this chat and will reply here shortly.';
                 $this->chatHistoryService->logAssistantMessage(
                     $chatSession,
@@ -118,6 +133,7 @@ class ChatController extends Controller
                     ['source' => 'takeover_notice'],
                 );
             } else {
+                Log::info('[Chat] Visitor replied during takeover — notifying operator', $sessionCtx);
                 // Visitor is replying while human has takeover — ping the operator
                 $this->pushNotificationService->visitorRepliedDuringTakeover($client, $chatSession->id);
             }
@@ -280,6 +296,10 @@ class ChatController extends Controller
             );
 
             $leadName = $leadPayload['name'] ?? 'Someone';
+            Log::info('[Chat] Lead captured — sending push', [
+                ...$sessionCtx,
+                'lead_name' => $leadName,
+            ]);
             $this->pushNotificationService->newLead($client, $leadName);
         }
 

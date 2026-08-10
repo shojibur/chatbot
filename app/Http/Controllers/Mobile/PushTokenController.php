@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Mobile;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class PushTokenController extends MobileController
 {
@@ -13,8 +14,13 @@ class PushTokenController extends MobileController
             'fcm_token' => ['required', 'string', 'max:500'],
         ]);
 
-        $this->currentUser($request)->update([
-            'fcm_token' => $validated['fcm_token'],
+        $user = $this->currentUser($request);
+        $user->update(['fcm_token' => $validated['fcm_token']]);
+
+        Log::info('[Push] FCM token registered', [
+            'user_id'       => $user->id,
+            'email'         => $user->email,
+            'token_preview' => substr($validated['fcm_token'], 0, 20) . '...',
         ]);
 
         return response()->json(['ok' => true]);
@@ -22,8 +28,12 @@ class PushTokenController extends MobileController
 
     public function destroy(Request $request): JsonResponse
     {
-        $this->currentUser($request)->update([
-            'fcm_token' => null,
+        $user = $this->currentUser($request);
+        $user->update(['fcm_token' => null]);
+
+        Log::info('[Push] FCM token cleared on logout', [
+            'user_id' => $user->id,
+            'email'   => $user->email,
         ]);
 
         return response()->json(['ok' => true]);

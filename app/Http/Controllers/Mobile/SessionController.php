@@ -6,6 +6,7 @@ use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class SessionController extends MobileController
@@ -17,14 +18,26 @@ class SessionController extends MobileController
         // Auto-release takeover only when the human operator hasn't sent a reply
         // for 15+ minutes (based on taken_over_at, not last_activity_at which
         // updates on every visitor message and would release active sessions).
-        $client->chatSessions()
+        $staleCount = $client->chatSessions()
             ->where('is_human_takeover', true)
             ->where('taken_over_at', '<', now()->subMinutes(15))
-            ->update([
-                'is_human_takeover' => false,
-                'taken_over_by_user_id' => null,
-                'taken_over_at' => null,
+            ->count();
+
+        if ($staleCount > 0) {
+            Log::info('[Session] Auto-releasing stale takeovers on refresh', [
+                'client_id' => $client->id,
+                'count'     => $staleCount,
             ]);
+
+            $client->chatSessions()
+                ->where('is_human_takeover', true)
+                ->where('taken_over_at', '<', now()->subMinutes(15))
+                ->update([
+                    'is_human_takeover' => false,
+                    'taken_over_by_user_id' => null,
+                    'taken_over_at' => null,
+                ]);
+        }
 
         $sessions = $client->chatSessions()
             ->where('session_token', 'not like', 'playground-%')
@@ -75,6 +88,12 @@ class SessionController extends MobileController
             'taken_over_at' => now(),
         ])->save();
 
+        Log::info('[Session] Human takeover started', [
+            'session_id' => $session->id,
+            'user_id'    => $user->id,
+            'user_email' => $user->email,
+        ]);
+
         return response()->json([
             'session' => $this->transformSession($session->fresh()),
         ]);
@@ -83,6 +102,7 @@ class SessionController extends MobileController
     public function releaseTakeover(Request $request, ChatSession $session): JsonResponse
     {
         $client = $this->currentClient($request);
+        $user = $this->currentUser($request);
         abort_unless($session->client_id === $client->id, 403);
 
         $session->forceFill([
@@ -90,6 +110,12 @@ class SessionController extends MobileController
             'taken_over_by_user_id' => null,
             'taken_over_at' => null,
         ])->save();
+
+        Log::info('[Session] Human takeover released', [
+            'session_id' => $session->id,
+            'user_id'    => $user->id,
+            'user_email' => $user->email,
+        ]);
 
         return response()->json([
             'session' => $this->transformSession($session->fresh()),
@@ -113,6 +139,11 @@ class SessionController extends MobileController
                 'taken_over_by_user_id' => $user->id,
                 'taken_over_at' => now(),
             ])->save();
+
+            Log::info('[Session] Auto-takeover on first message send', [
+                'session_id' => $session->id,
+                'user_id'    => $user->id,
+            ]);
         }
 
         $message = ChatMessage::create([
@@ -134,6 +165,14 @@ class SessionController extends MobileController
         $session->forceFill([
             'last_activity_at' => now(),
         ])->save();
+
+        Log::info('[Session] Operator message sent', [
+            'session_id'  => $session->id,
+            'message_id'  => $message->id,
+            'user_id'     => $user->id,
+            'user_email'  => $user->email,
+            'char_length' => strlen($validated['content']),
+        ]);
 
         return response()->json([
             'session' => $this->transformSession($session->fresh()),
