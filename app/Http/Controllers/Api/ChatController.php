@@ -70,9 +70,36 @@ class ChatController extends Controller
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
+        // Auto-release stale takeovers — if the human hasn't been active for 15+ minutes, resume AI.
+        if ($chatSession->is_human_takeover && $chatSession->last_activity_at?->lt(now()->subMinutes(5))) {
+            $chatSession->forceFill([
+                'is_human_takeover' => false,
+                'taken_over_by_user_id' => null,
+                'taken_over_at' => null,
+            ])->save();
+        }
+
         if ($chatSession->is_human_takeover) {
+            $alreadyNotified = $chatSession->messages()
+                ->where('role', 'assistant')
+                ->whereJsonContains('meta->source', 'takeover_notice')
+                ->exists();
+
+            $answer = null;
+
+            if (! $alreadyNotified) {
+                $answer = 'A human from the team has taken over this chat and will reply here shortly.';
+                $this->chatHistoryService->logAssistantMessage(
+                    $chatSession,
+                    $answer,
+                    0,
+                    false,
+                    ['source' => 'takeover_notice'],
+                );
+            }
+
             return response()->json([
-                'answer' => 'A human from the team has taken over this chat and will reply here shortly.',
+                'answer' => $answer,
                 'cached' => false,
                 'session_token' => $chatSession->session_token,
                 'assistant_message_id' => null,

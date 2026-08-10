@@ -489,6 +489,37 @@ function AppShell({
 }: AppShellProps) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
+  const [sessionThreadOpen, setSessionThreadOpen] = useState(false);
+
+  const tabContent = activeTab === 'sessions' ? (
+    <SessionsTab
+      sessions={appData.sessions}
+      token={token}
+      onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
+      onThreadOpen={() => setSessionThreadOpen(true)}
+      onThreadClose={() => setSessionThreadOpen(false)}
+    />
+  ) : activeTab === 'leads' ? (
+    <LeadsTab
+      leads={appData.leads}
+      token={token}
+      onLeadsChange={(leads) => onDataChange({ ...appData, leads })}
+    />
+  ) : activeTab === 'knowledge' ? (
+    <KnowledgeTab
+      initialSources={appData.knowledgeSources}
+      initialMeta={appData.knowledgeMeta}
+      token={token}
+    />
+  ) : (
+    <SettingsTab
+      settings={appData.settings}
+      token={token}
+      userContext={userContext}
+      onLogout={onLogout}
+      onSettingsChange={(settings) => onDataChange({ ...appData, settings })}
+    />
+  );
 
   return (
     <View style={[styles.appShell, { backgroundColor: theme.colors.bg }]}>
@@ -516,38 +547,13 @@ function AppShell({
 
       {appError ? <ErrorBanner text={appError} inset /> : null}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {activeTab === 'sessions' ? (
-          <SessionsTab
-            sessions={appData.sessions}
-            token={token}
-            onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
-          />
-        ) : null}
-        {activeTab === 'leads' ? (
-          <LeadsTab
-            leads={appData.leads}
-            token={token}
-            onLeadsChange={(leads) => onDataChange({ ...appData, leads })}
-          />
-        ) : null}
-        {activeTab === 'knowledge' ? (
-          <KnowledgeTab
-            initialSources={appData.knowledgeSources}
-            initialMeta={appData.knowledgeMeta}
-            token={token}
-          />
-        ) : null}
-        {activeTab === 'settings' ? (
-          <SettingsTab
-            settings={appData.settings}
-            token={token}
-            userContext={userContext}
-            onLogout={onLogout}
-            onSettingsChange={(settings) => onDataChange({ ...appData, settings })}
-          />
-        ) : null}
-      </ScrollView>
+      {sessionThreadOpen ? (
+        <View style={{ flex: 1 }}>{tabContent}</View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {tabContent}
+        </ScrollView>
+      )}
 
       <View
         style={[
@@ -601,10 +607,14 @@ function SessionsTab({
   sessions,
   token,
   onSessionsChange,
+  onThreadOpen,
+  onThreadClose,
 }: {
   sessions: MobileSession[];
   token: string;
   onSessionsChange: (sessions: MobileSession[]) => void;
+  onThreadOpen: () => void;
+  onThreadClose: () => void;
 }) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
@@ -624,6 +634,7 @@ function SessionsTab({
 
   async function openSession(session: MobileSession): Promise<void> {
     setSelectedSession(session);
+    onThreadOpen();
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -687,10 +698,16 @@ function SessionsTab({
   // When a session is open, render the full chat thread view
   if (selectedSession) {
     return (
-      <View style={styles.sectionColumn}>
-        {/* Thread header */}
+      <View style={styles.threadScreen}>
+        {/* Sticky header */}
         <View style={[styles.threadHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Pressable style={styles.threadBackBtn} onPress={() => { setSelectedSession(null); setMessages([]); setError(null); setSuccess(null); }}>
+          <Pressable style={styles.threadBackBtn} onPress={() => {
+            setSelectedSession(null);
+            setMessages([]);
+            setError(null);
+            setSuccess(null);
+            onThreadClose();
+          }}>
             <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
             <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>Sessions</Text>
           </Pressable>
@@ -753,106 +770,127 @@ function SessionsTab({
         {error ? <ErrorBanner text={error} /> : null}
         {success ? <SuccessBanner text={success} /> : null}
 
-        {/* Messages */}
-        {loading ? (
-          <View style={styles.threadLoadingWrap}>
-            <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages...</Text>
-          </View>
-        ) : messages.length === 0 ? (
-          <View style={styles.threadEmptyWrap}>
-            <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
-            <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages yet</Text>
-          </View>
-        ) : (
-          <View style={styles.messagesColumn}>
-            {messages.map((message) => {
-              const isVisitor = message.role === 'user';
-              const isHuman = message.role === 'assistant' && message.human_takeover;
-              const isAI = message.role === 'assistant' && !message.human_takeover;
+        {/* Scrollable messages */}
+        <ScrollView style={styles.threadScrollArea} contentContainerStyle={styles.threadScrollContent} showsVerticalScrollIndicator={false}>
+          {loading ? (
+            <View style={styles.threadLoadingWrap}>
+              <ActivityIndicator color={theme.colors.primary} />
+              <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages...</Text>
+            </View>
+          ) : messages.length === 0 ? (
+            <View style={styles.threadEmptyWrap}>
+              <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
+              <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages yet</Text>
+            </View>
+          ) : (
+            <View style={styles.messagesColumn}>
+              {messages.map((message) => {
+                const isVisitor = message.role === 'user';
+                const isHuman = message.role === 'assistant' && message.human_takeover;
+                const isAI = message.role === 'assistant' && !message.human_takeover;
 
-              return (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.chatBubbleRow,
-                    isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight,
-                  ]}
-                >
-                  {isVisitor ? (
-                    <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                      <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
-                    </View>
-                  ) : null}
+                return (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.chatBubbleRow,
+                      isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight,
+                    ]}
+                  >
+                    {isVisitor ? (
+                      <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                        <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
+                      </View>
+                    ) : null}
 
-                  <View style={{ maxWidth: '75%', gap: 4 }}>
-                    <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
-                      {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
-                    </Text>
-                    <View
-                      style={[
-                        styles.chatBubble,
-                        isVisitor
-                          ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
-                          : isHuman
-                          ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
-                          : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
-                      ]}
-                    >
-                      <Text
+                    <View style={{ maxWidth: '75%', gap: 4 }}>
+                      <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
+                        {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
+                      </Text>
+                      <View
                         style={[
-                          styles.chatBubbleText,
-                          { color: isVisitor ? theme.colors.text : '#ffffff' },
+                          styles.chatBubble,
+                          isVisitor
+                            ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+                            : isHuman
+                            ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
+                            : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
                         ]}
                       >
-                        {message.content}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.chatBubbleText,
+                            { color: isVisitor ? theme.colors.text : '#ffffff' },
+                          ]}
+                        >
+                          {message.content}
+                        </Text>
+                      </View>
                     </View>
+
+                    {!isVisitor ? (
+                      <View style={[
+                        styles.chatAvatarSmall,
+                        {
+                          backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22',
+                          borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44',
+                        },
+                      ]}>
+                        <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
+                      </View>
+                    ) : null}
                   </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
 
-                  {!isVisitor ? (
-                    <View style={[
-                      styles.chatAvatarSmall,
-                      {
-                        backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22',
-                        borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44',
-                      },
-                    ]}>
-                      <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Reply box — only shown in takeover mode */}
+        {/* Sticky footer — reply box or takeover CTA */}
         {selectedSession.is_human_takeover ? (
-          <View style={[styles.replyBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <TextInput
-              style={[styles.replyInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Type your reply..."
-              placeholderTextColor={theme.colors.subtle}
-              value={replyText}
-              onChangeText={setReplyText}
-              multiline
-              maxLength={2000}
-            />
+          <View style={{ gap: 8 }}>
+            <View style={[styles.replyBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              <TextInput
+                style={[styles.replyInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text }]}
+                placeholder="Type your reply..."
+                placeholderTextColor={theme.colors.subtle}
+                value={replyText}
+                onChangeText={setReplyText}
+                multiline
+                maxLength={2000}
+              />
+              <Pressable
+                style={[
+                  styles.replySendBtn,
+                  {
+                    backgroundColor: replyText.trim() && !sendingMessage ? theme.colors.primary : theme.colors.subtle,
+                  },
+                ]}
+                disabled={!replyText.trim() || sendingMessage}
+                onPress={handleSendMessage}
+              >
+                {sendingMessage
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="send" size={18} color="#fff" />
+                }
+              </Pressable>
+            </View>
             <Pressable
-              style={[
-                styles.replySendBtn,
-                {
-                  backgroundColor: replyText.trim() && !sendingMessage ? theme.colors.primary : theme.colors.subtle,
-                },
-              ]}
-              disabled={!replyText.trim() || sendingMessage}
-              onPress={handleSendMessage}
+              style={[styles.handBackBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, opacity: savingTakeover ? 0.6 : 1 }]}
+              disabled={savingTakeover}
+              onPress={async () => {
+                await handleTakeover();
+                setSelectedSession(null);
+                setMessages([]);
+                setError(null);
+                setSuccess(null);
+                onThreadClose();
+              }}
             >
-              {sendingMessage
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="send" size={18} color="#fff" />
-              }
+              <Ionicons name="hardware-chip-outline" size={15} color={theme.colors.muted} />
+              <Text style={[styles.handBackText, { color: theme.colors.muted }]}>
+                {savingTakeover ? 'Releasing...' : 'Hand back to AI & exit'}
+              </Text>
             </Pressable>
           </View>
         ) : (
@@ -2412,6 +2450,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   // Thread / chat view
+  threadScreen: {
+    flex: 1,
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  threadScrollArea: {
+    flex: 1,
+  },
+  threadScrollContent: {
+    paddingBottom: 16,
+    gap: 0,
+  },
   threadHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2585,6 +2636,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   takeoverCtaText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  handBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  handBackText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
   },
