@@ -178,7 +178,7 @@ type RequestOptions = {
   body?: Record<string, unknown>;
 };
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api/mobile').replace(/\/$/, '');
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://app.zaochat.com/api/mobile').replace(/\/$/, '');
 
 export async function login(email: string, password: string): Promise<{ token: string }> {
   return request('/auth/login', {

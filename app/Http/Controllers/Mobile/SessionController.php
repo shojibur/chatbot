@@ -14,10 +14,12 @@ class SessionController extends MobileController
     {
         $client = $this->currentClient($request);
 
-        // Auto-release takeover on sessions that have been inactive for 15+ minutes.
+        // Auto-release takeover only when the human operator hasn't sent a reply
+        // for 15+ minutes (based on taken_over_at, not last_activity_at which
+        // updates on every visitor message and would release active sessions).
         $client->chatSessions()
             ->where('is_human_takeover', true)
-            ->where('last_activity_at', '<', now()->subMinutes(5))
+            ->where('taken_over_at', '<', now()->subMinutes(15))
             ->update([
                 'is_human_takeover' => false,
                 'taken_over_by_user_id' => null,

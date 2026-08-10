@@ -15,6 +15,7 @@ use App\Services\LeadCaptureService;
 use App\Services\PushNotificationService;
 use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -68,22 +69,35 @@ class ChatController extends Controller
 
         // Resolve or create a chat session, then fetch prior history BEFORE logging
         // so that history only contains previous turns, not the current message.
-        $isNewSession = ! $request->input('session_token');
         $chatSession = $this->chatHistoryService->resolveSession($client, $request);
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
 
-        if ($isNewSession) {
+        // Notify on truly new sessions — wasRecentlyCreated is true regardless of
+        // whether a session_token was supplied (handles token mismatch case too).
+        if ($chatSession->wasRecentlyCreated) {
             $this->pushNotificationService->newSession($client);
         }
 
-        // Auto-release stale takeovers — if the human hasn't been active for 15+ minutes, resume AI.
-        if ($chatSession->is_human_takeover && $chatSession->last_activity_at?->lt(now()->subMinutes(5))) {
-            $chatSession->forceFill([
-                'is_human_takeover' => false,
-                'taken_over_by_user_id' => null,
-                'taken_over_at' => null,
-            ])->save();
+        // Auto-release stale takeovers — only if the human has not sent a reply
+        // for 15 minutes (based on taken_over_at, not last_activity_at which
+        // updates on every visitor message and would release active sessions).
+        if ($chatSession->is_human_takeover && $chatSession->taken_over_at?->lt(now()->subMinutes(15))) {
+            $lastHumanMessage = $chatSession->messages()
+                ->where('role', 'assistant')
+                ->whereJsonContains('meta->source', 'mobile_operator')
+                ->latest()
+                ->value('created_at');
+
+            $lastHumanAt = $lastHumanMessage ? Carbon::parse($lastHumanMessage) : $chatSession->taken_over_at;
+
+            if ($lastHumanAt->lt(now()->subMinutes(15))) {
+                $chatSession->forceFill([
+                    'is_human_takeover' => false,
+                    'taken_over_by_user_id' => null,
+                    'taken_over_at' => null,
+                ])->save();
+            }
         }
 
         if ($chatSession->is_human_takeover) {
