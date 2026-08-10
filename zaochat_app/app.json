@@ -12,7 +12,8 @@
     },
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zaochat.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,10 +25,6 @@
       "googleServicesFile": "./google-services.json",
       "package": "com.zaochat.app",
       "predictiveBackGestureEnabled": false
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.zaochat.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +39,12 @@
           "sounds": []
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "55cca78b-bb3c-4abd-b54a-2aa031fad98b"
+      }
+    },
+    "owner": "shojibur"
   }
 }
