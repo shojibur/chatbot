@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "987453270091",
+    "project_id": "zaochat-app",
+    "storage_bucket": "zaochat-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:987453270091:android:104c9a18460060980385ce",
+        "android_client_info": {
+          "package_name": "com.zaochat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCh5lzZ_4kVLbmiDsXYurFshFT14LXZzXs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

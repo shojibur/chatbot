@@ -7,14 +7,15 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -28,22 +29,23 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   changePassword,
-  fetchKnowledgePage,
+  deletePushToken,
+  fetchLeadsPage,
   getSessionMessages,
   getLeadDetail,
   loadMobileAppData,
   login as loginRequest,
   logout as logoutRequest,
   releaseSessionTakeover,
+  savePushToken,
   sendSessionMessage,
   takeoverSession,
   updateLeadStatus,
   updateWidgetSettings,
   type MobileAppBootstrap,
-  type MobileKnowledgeSource,
   type MobileLead,
   type MobileLeadDetail,
-  type MobilePaginatedKnowledge,
+  type MobilePaginatedLeads,
   type MobileSession,
   type MobileSessionMessage,
   type MobileSettingsPayload,
@@ -54,16 +56,49 @@ import { getTheme } from './src/theme';
 const logo = require('./assets/splash-icon.png');
 const TOKEN_STORAGE_KEY = 'zaochat.mobile.auth_token';
 
+// Show notifications even when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+async function registerForPushNotifications(): Promise<string | null> {
+  if (!Device.isDevice) {
+    return null;
+  }
+
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  let finalStatus = existing;
+
+  if (existing !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    return null;
+  }
+
+  const result = await Notifications.getDevicePushTokenAsync();
+
+  return result.data;
+}
+
 type Screen = 'splash' | 'onboarding' | 'login' | 'app';
-type Tab = 'sessions' | 'leads' | 'knowledge' | 'settings';
+type Tab = 'sessions' | 'history' | 'leads' | 'settings';
 
 type TabItem = { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap };
 
 const TAB_ITEMS: TabItem[] = [
-  { key: 'sessions',  label: 'Sessions',  icon: 'chatbubble-outline',  iconActive: 'chatbubble' },
-  { key: 'leads',     label: 'Leads',     icon: 'flash-outline',       iconActive: 'flash' },
-  { key: 'knowledge', label: 'Knowledge', icon: 'library-outline',     iconActive: 'library' },
-  { key: 'settings',  label: 'Settings',  icon: 'settings-outline',    iconActive: 'settings' },
+  { key: 'sessions', label: 'Live',    icon: 'radio-outline',      iconActive: 'radio' },
+  { key: 'history',  label: 'History', icon: 'time-outline',       iconActive: 'time' },
+  { key: 'leads',    label: 'Leads',   icon: 'flash-outline',      iconActive: 'flash' },
+  { key: 'settings', label: 'Settings',icon: 'settings-outline',   iconActive: 'settings' },
 ];
 
 export default function App() {
@@ -81,6 +116,9 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [userContext, setUserContext] = useState<MobileUserContext | null>(null);
   const [appData, setAppData] = useState<MobileAppBootstrap | null>(null);
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const authTokenRef = useRef<string | null>(null);
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -88,6 +126,49 @@ export default function App() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+
+  // Set up notification listeners once on mount
+  useEffect(() => {
+    // Received while app is foregrounded
+    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
+      // Nothing needed — handler above already shows the alert
+    });
+
+    // User tapped a notification
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, string>;
+
+      if (data?.type === 'new_session' || data?.type === 'takeover_reply') {
+        setActiveTab('sessions');
+      } else if (data?.type === 'new_lead') {
+        setActiveTab('leads');
+      }
+    });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, []);
+
+  // Register push token whenever auth token changes
+  useEffect(() => {
+    authTokenRef.current = token;
+
+    if (!token) {
+      return;
+    }
+
+    registerForPushNotifications()
+      .then((fcmToken) => {
+        if (fcmToken && authTokenRef.current) {
+          void savePushToken(authTokenRef.current, fcmToken);
+        }
+      })
+      .catch(() => {
+        // Non-critical — app works fine without push
+      });
+  }, [token]);
 
   useEffect(() => {
     if (!fontsLoaded) return;
@@ -191,6 +272,7 @@ export default function App() {
   async function handleLogout(): Promise<void> {
     if (token) {
       try {
+        await deletePushToken(token);
         await logoutRequest(token);
       } catch {
         // Keep local logout resilient.
@@ -493,23 +575,23 @@ function AppShell({
 
   const tabContent = activeTab === 'sessions' ? (
     <SessionsTab
-      sessions={appData.sessions}
+      sessions={appData.sessions.filter((s) => s.is_human_takeover)}
       token={token}
       onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
       onThreadOpen={() => setSessionThreadOpen(true)}
       onThreadClose={() => setSessionThreadOpen(false)}
     />
+  ) : activeTab === 'history' ? (
+    <HistoryTab
+      sessions={appData.sessions.filter((s) => !s.is_human_takeover)}
+      token={token}
+    />
   ) : activeTab === 'leads' ? (
     <LeadsTab
       leads={appData.leads}
+      leadsMeta={appData.leadsMeta}
       token={token}
-      onLeadsChange={(leads) => onDataChange({ ...appData, leads })}
-    />
-  ) : activeTab === 'knowledge' ? (
-    <KnowledgeTab
-      initialSources={appData.knowledgeSources}
-      initialMeta={appData.knowledgeMeta}
-      token={token}
+      onLeadsChange={(leads, leadsMeta) => onDataChange({ ...appData, leads, leadsMeta })}
     />
   ) : (
     <SettingsTab
@@ -909,26 +991,68 @@ function SessionsTab({
   }
 
   // Session list view
-  const liveCount = sessions.filter((s) => s.is_human_takeover).length;
+  const liveSessions = sessions.filter((s) => s.is_human_takeover);
+  const historySessions = sessions.filter((s) => !s.is_human_takeover);
+
+  function renderSessionCard(session: MobileSession) {
+    const isLive = session.is_human_takeover;
+    const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
+    const preview = session.first_message || session.page_url || 'No preview';
+
+    return (
+      <Pressable
+        key={session.id}
+        style={[
+          styles.sessionCard,
+          {
+            backgroundColor: theme.colors.card,
+            borderColor: isLive ? theme.colors.primary + '60' : theme.colors.border,
+          },
+          isLive && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+        ]}
+        onPress={() => openSession(session)}
+      >
+        <View style={styles.sessionCardLeft}>
+          <View style={[
+            styles.sessionCardAvatar,
+            { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+          ]}>
+            <Ionicons name="person" size={18} color={isLive ? theme.colors.primary : theme.colors.muted} />
+            {isLive ? <View style={styles.sessionCardLiveDot} /> : null}
+          </View>
+        </View>
+
+        <View style={styles.sessionCardBody}>
+          <View style={styles.sessionCardTopRow}>
+            <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+              {visitorName}
+            </Text>
+            <View style={[
+              styles.sessionCardBadge,
+              { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+            ]}>
+              <Text style={[styles.sessionCardBadgeText, { color: isLive ? theme.colors.primary : theme.colors.muted }]}>
+                {isLive ? 'You\'re live' : `${session.message_count} msgs`}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+            {preview}
+          </Text>
+          {session.page_url ? (
+            <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]} numberOfLines={1}>
+              {session.page_url}
+            </Text>
+          ) : null}
+        </View>
+
+        <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.sectionColumn}>
-      {/* Header */}
-      <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-        <View style={{ gap: 4 }}>
-          <Text style={[styles.sessionsHeaderTitle, { color: theme.colors.text }]}>Live Sessions</Text>
-          <Text style={[styles.sessionsHeaderSub, { color: theme.colors.muted }]}>
-            {sessions.length === 0 ? 'No active sessions' : `${sessions.length} session${sessions.length === 1 ? '' : 's'}${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
-          </Text>
-        </View>
-        {liveCount > 0 ? (
-          <View style={[styles.liveChip, { backgroundColor: '#4ade8022', borderColor: '#4ade8055' }]}>
-            <View style={styles.liveDot} />
-            <Text style={[styles.liveChipText, { color: '#4ade80' }]}>{liveCount} Live</Text>
-          </View>
-        ) : null}
-      </View>
-
       {sessions.length === 0 ? (
         <View style={[styles.sessionsEmpty, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <Ionicons name="chatbubbles-outline" size={40} color={theme.colors.subtle} />
@@ -938,62 +1062,30 @@ function SessionsTab({
           </Text>
         </View>
       ) : (
-        sessions.map((session) => {
-          const isLive = session.is_human_takeover;
-          const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
-          const preview = session.first_message || session.page_url || 'No preview';
-
-          return (
-            <Pressable
-              key={session.id}
-              style={[
-                styles.sessionCard,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderColor: isLive ? theme.colors.primary + '60' : theme.colors.border,
-                },
-                isLive && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-              ]}
-              onPress={() => openSession(session)}
-            >
-              <View style={styles.sessionCardLeft}>
-                <View style={[
-                  styles.sessionCardAvatar,
-                  { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
-                ]}>
-                  <Ionicons name="person" size={18} color={isLive ? theme.colors.primary : theme.colors.muted} />
-                  {isLive ? <View style={styles.sessionCardLiveDot} /> : null}
+        <>
+          {/* Live section */}
+          {liveSessions.length > 0 ? (
+            <>
+              <View style={styles.sessionsSectionHeader}>
+                <View style={[styles.liveChip, { backgroundColor: '#4ade8022', borderColor: '#4ade8055' }]}>
+                  <View style={styles.liveDot} />
+                  <Text style={[styles.liveChipText, { color: '#4ade80' }]}>{liveSessions.length} Live</Text>
                 </View>
               </View>
+              {liveSessions.map(renderSessionCard)}
+            </>
+          ) : null}
 
-              <View style={styles.sessionCardBody}>
-                <View style={styles.sessionCardTopRow}>
-                  <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
-                    {visitorName}
-                  </Text>
-                  <View style={[
-                    styles.sessionCardBadge,
-                    { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
-                  ]}>
-                    <Text style={[styles.sessionCardBadgeText, { color: isLive ? theme.colors.primary : theme.colors.muted }]}>
-                      {isLive ? 'You\'re live' : `${session.message_count} msgs`}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
-                  {preview}
-                </Text>
-                {session.page_url ? (
-                  <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]} numberOfLines={1}>
-                    {session.page_url}
-                  </Text>
-                ) : null}
+          {/* History section */}
+          {historySessions.length > 0 ? (
+            <>
+              <View style={styles.sessionsSectionHeader}>
+                <Text style={[styles.sessionsSectionLabel, { color: theme.colors.muted }]}>History</Text>
               </View>
-
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
-            </Pressable>
-          );
-        })
+              {historySessions.map(renderSessionCard)}
+            </>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -1001,12 +1093,14 @@ function SessionsTab({
 
 function LeadsTab({
   leads,
+  leadsMeta,
   token,
   onLeadsChange,
 }: {
   leads: MobileLead[];
+  leadsMeta: MobilePaginatedLeads['meta'];
   token: string;
-  onLeadsChange: (leads: MobileLead[]) => void;
+  onLeadsChange: (leads: MobileLead[], meta: MobilePaginatedLeads['meta']) => void;
 }) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
@@ -1016,13 +1110,25 @@ function LeadsTab({
   const [loadingLeadId, setLoadingLeadId] = useState<number | null>(null);
   const [linkedMessages, setLinkedMessages] = useState<MobileSessionMessage[]>([]);
   const [loadingLinkedMessages, setLoadingLinkedMessages] = useState(false);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function openLead(lead: MobileLead): Promise<void> {
+  async function handleLeadPress(lead: MobileLead): Promise<void> {
+    // Toggle — tap same lead to close
+    if (selectedLeadId === lead.id) {
+      setSelectedLeadId(null);
+      setSelectedLeadDetail(null);
+      setLinkedMessages([]);
+      setError(null);
+
+      return;
+    }
+
     setSelectedLeadId(lead.id);
+    setSelectedLeadDetail(null);
     setLoadingLeadId(lead.id);
-    setError(null);
     setLinkedMessages([]);
+    setError(null);
 
     try {
       const detail = await getLeadDetail(token, lead.id);
@@ -1041,7 +1147,11 @@ function LeadsTab({
 
     try {
       const updatedLead = await updateLeadStatus(token, lead.id, status);
-      onLeadsChange(leads.map((item) => (item.id === updatedLead.id ? updatedLead : item)));
+      onLeadsChange(
+        leads.map((item) => (item.id === updatedLead.id ? updatedLead : item)),
+        leadsMeta,
+      );
+
       if (selectedLeadId === updatedLead.id) {
         setSelectedLeadDetail(updatedLead);
       }
@@ -1053,7 +1163,9 @@ function LeadsTab({
   }
 
   async function openLinkedSession(): Promise<void> {
-    if (!selectedLeadDetail?.chat_session_id) return;
+    if (!selectedLeadDetail?.chat_session_id) {
+      return;
+    }
 
     setLoadingLinkedMessages(true);
     setError(null);
@@ -1069,213 +1181,16 @@ function LeadsTab({
     }
   }
 
-  const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? null;
-
-  return (
-    <View style={styles.sectionColumn}>
-      <View
-        style={[
-          styles.sectionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Leads</Text>
-        <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-          Tap a lead to inspect it, then push its status back to Laravel.
-        </Text>
-      </View>
-
-      {error ? <ErrorBanner text={error} /> : null}
-
-      {leads.map((lead) => (
-        <Pressable key={lead.id} onPress={() => openLead(lead)}>
-          <CardRow
-            title={lead.name}
-            subtitle={lead.user_request || lead.contact}
-            meta={capitalize(lead.status)}
-          />
-        </Pressable>
-      ))}
-
-      {selectedLead ? (
-        <View
-          style={[
-            styles.sectionCard,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{selectedLead.name}</Text>
-          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-            {selectedLead.contact}
-          </Text>
-          {loadingLeadId === selectedLead.id ? (
-            <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>Loading lead detail...</Text>
-          ) : (
-            <>
-              <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                {selectedLeadDetail?.user_request || selectedLead.user_request || 'No user request recorded.'}
-              </Text>
-              <Text style={[styles.detailMeta, { color: theme.colors.muted }]}>
-                Trigger: {capitalize(selectedLead.trigger)}
-              </Text>
-              {selectedLeadDetail?.conversation_snapshot ? (
-                <Text style={[styles.detailSnapshot, { color: theme.colors.text }]}>
-                  Snapshot: {typeof selectedLeadDetail.conversation_snapshot === 'string'
-                    ? selectedLeadDetail.conversation_snapshot
-                    : JSON.stringify(selectedLeadDetail.conversation_snapshot)}
-                </Text>
-              ) : null}
-              {selectedLeadDetail?.chat_session_id ? (
-                <Pressable
-                  style={[
-                    styles.inlineActionButton,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  onPress={openLinkedSession}
-                >
-                  <Text style={[styles.inlineActionText, { color: theme.colors.accent }]}>
-                    {loadingLinkedMessages ? 'Loading linked session...' : 'View linked session messages'}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {linkedMessages.length > 0 ? (
-                <View style={styles.messagesColumn}>
-                  {linkedMessages.map((message) => (
-                    <View
-                      key={message.id}
-                      style={[
-                        styles.messageBubble,
-                        {
-                          backgroundColor:
-                            message.role === 'assistant' ? theme.colors.surface : theme.colors.primary,
-                          borderColor:
-                            message.role === 'assistant' ? theme.colors.border : theme.colors.primary,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.messageRole,
-                          {
-                            color:
-                              message.role === 'assistant'
-                                ? theme.colors.accent
-                                : theme.colors.primaryText,
-                          },
-                        ]}
-                      >
-                        {message.role === 'assistant' ? 'AI' : 'Visitor'}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.messageContent,
-                          {
-                            color:
-                              message.role === 'assistant'
-                                ? theme.colors.text
-                                : theme.colors.primaryText,
-                          },
-                        ]}
-                      >
-                        {message.content}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </>
-          )}
-
-          <View style={styles.statusRow}>
-            {(['new', 'contacted', 'closed'] as const).map((status) => (
-              <Pressable
-                key={status}
-                style={[
-                  styles.statusButton,
-                  {
-                    backgroundColor:
-                      selectedLead.status === status ? theme.colors.primary : theme.colors.surface,
-                    borderColor:
-                      selectedLead.status === status ? theme.colors.primary : theme.colors.border,
-                    opacity: savingLeadId === selectedLead.id ? 0.65 : 1,
-                  },
-                ]}
-                disabled={savingLeadId === selectedLead.id}
-                onPress={() => changeStatus(selectedLead, status)}
-              >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    {
-                      color:
-                        selectedLead.status === status ? theme.colors.primaryText : theme.colors.text,
-                    },
-                  ]}
-                >
-                  {savingLeadId === selectedLead.id && selectedLead.status !== status
-                    ? 'Saving...'
-                    : capitalize(status)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-const WEB_APP_URL = 'https://app.zaochat.com';
-
-const STATUS_COLORS: Record<string, string> = {
-  ready: '#4ade80',
-  processing: '#fbbf24',
-  queued: '#60a5fa',
-  failed: '#f87171',
-  draft: '#9ca3af',
-};
-
-const FALLBACK_META: MobilePaginatedKnowledge['meta'] = {
-  current_page: 1,
-  last_page: 1,
-  per_page: 25,
-  total: 0,
-  has_more: false,
-};
-
-function KnowledgeTab({
-  initialSources,
-  initialMeta,
-  token,
-}: {
-  initialSources: MobileKnowledgeSource[];
-  initialMeta: MobilePaginatedKnowledge['meta'] | undefined;
-  token: string;
-}) {
-  const scheme = useColorScheme();
-  const theme = getTheme(scheme);
-
-  const [sources, setSources] = useState<MobileKnowledgeSource[]>(initialSources ?? []);
-  const [meta, setMeta] = useState<MobilePaginatedKnowledge['meta']>(initialMeta ?? { ...FALLBACK_META, total: (initialSources ?? []).length });
-  const [loadingPage, setLoadingPage] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   async function loadPage(page: number): Promise<void> {
     setLoadingPage(true);
+    setSelectedLeadId(null);
+    setSelectedLeadDetail(null);
+    setLinkedMessages([]);
     setError(null);
+
     try {
-      const result = await fetchKnowledgePage(token, page);
-      setSources(result.knowledge_sources);
-      setMeta(result.meta);
+      const result = await fetchLeadsPage(token, page);
+      onLeadsChange(result.leads, result.meta);
     } catch (err) {
       setError(resolveErrorMessage(err));
     } finally {
@@ -1283,168 +1198,414 @@ function KnowledgeTab({
     }
   }
 
-  const readyCount = sources.filter((s) => s.status === 'ready').length;
-
   return (
     <View style={styles.sectionColumn}>
-      {/* Web callout */}
-      <Pressable
-        style={[
-          styles.knowledgeCallout,
-          { backgroundColor: theme.colors.primary + '14', borderColor: theme.colors.primary + '35' },
-        ]}
-        onPress={() => Linking.openURL(WEB_APP_URL + '/knowledge')}
-      >
-        <View style={[styles.knowledgeCalloutIcon, { backgroundColor: theme.colors.primary + '20' }]}>
-          <Ionicons name="desktop-outline" size={22} color={theme.colors.primary} />
+      {/* Header */}
+      <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={{ gap: 4 }}>
+          <Text style={[styles.sessionsHeaderTitle, { color: theme.colors.text }]}>Leads</Text>
+          <Text style={[styles.sessionsHeaderSub, { color: theme.colors.muted }]}>
+            {leadsMeta.total === 0 ? 'No leads yet' : `${leadsMeta.total} lead${leadsMeta.total === 1 ? '' : 's'}`}
+          </Text>
         </View>
-        <View style={styles.knowledgeCalloutCopy}>
-          <Text style={[styles.knowledgeCalloutTitle, { color: theme.colors.text }]}>
-            Manage on the web app
-          </Text>
-          <Text style={[styles.knowledgeCalloutBody, { color: theme.colors.muted }]}>
-            Add, edit, or delete sources from the web dashboard.
-          </Text>
-          <View style={styles.knowledgeCalloutLink}>
-            <Text style={[styles.knowledgeCalloutUrl, { color: theme.colors.primary }]}>
-              app.zaochat.com
-            </Text>
-            <Ionicons name="arrow-forward" size={12} color={theme.colors.primary} />
-          </View>
-        </View>
-      </Pressable>
-
-      {/* Summary bar */}
-      <View
-        style={[styles.sectionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-      >
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Knowledge base</Text>
-        {meta.total === 0 ? (
-          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-            No sources yet. Visit the web app to add your first document or URL.
-          </Text>
-        ) : (
-          <View style={styles.knowledgeStatsRow}>
-            <View style={styles.knowledgeStat}>
-              <Text style={[styles.knowledgeStatNum, { color: theme.colors.text }]}>{meta.total}</Text>
-              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Total</Text>
-            </View>
-            <View style={[styles.knowledgeStatDivider, { backgroundColor: theme.colors.border }]} />
-            <View style={styles.knowledgeStat}>
-              <Text style={[styles.knowledgeStatNum, { color: '#4ade80' }]}>{readyCount}</Text>
-              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Ready</Text>
-            </View>
-            <View style={[styles.knowledgeStatDivider, { backgroundColor: theme.colors.border }]} />
-            <View style={styles.knowledgeStat}>
-              <Text style={[styles.knowledgeStatNum, { color: theme.colors.text }]}>
-                {meta.last_page > 1 ? `${meta.current_page}/${meta.last_page}` : '—'}
-              </Text>
-              <Text style={[styles.knowledgeStatLabel, { color: theme.colors.muted }]}>Page</Text>
-            </View>
-          </View>
-        )}
       </View>
 
       {error ? <ErrorBanner text={error} /> : null}
 
-      {/* Source list */}
-      {sources.map((source) => (
-        <View
-          key={source.id}
-          style={[
-            styles.knowledgeItem,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-          ]}
-        >
-          <View style={styles.knowledgeItemHeader}>
-            <View style={[styles.knowledgeTypeTag, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Ionicons
-                name={source.source_type === 'url' ? 'link-outline' : source.source_type === 'file' ? 'document-outline' : 'create-outline'}
-                size={12}
-                color={theme.colors.muted}
-              />
-              <Text style={[styles.knowledgeTypeText, { color: theme.colors.muted }]}>
-                {capitalize(source.source_type)}
-              </Text>
-            </View>
-            <View style={[styles.knowledgeStatusDot, { backgroundColor: STATUS_COLORS[source.status] ?? '#9ca3af' }]} />
-            <Text style={[styles.knowledgeStatusText, { color: STATUS_COLORS[source.status] ?? theme.colors.muted }]}>
-              {capitalize(source.status)}
-            </Text>
-          </View>
-
-          <Text style={[styles.knowledgeItemTitle, { color: theme.colors.text }]} numberOfLines={2}>
-            {source.title}
+      {leads.length === 0 ? (
+        <View style={[styles.sessionsEmpty, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Ionicons name="flash-outline" size={40} color={theme.colors.subtle} />
+          <Text style={[styles.sessionsEmptyTitle, { color: theme.colors.text }]}>No leads yet</Text>
+          <Text style={[styles.sessionsEmptyBody, { color: theme.colors.muted }]}>
+            Leads captured by the chatbot will appear here.
           </Text>
-
-          {source.source_url ? (
-            <Text style={[styles.knowledgeItemMeta, { color: theme.colors.muted }]} numberOfLines={1}>
-              {source.source_url}
-            </Text>
-          ) : source.file_name ? (
-            <Text style={[styles.knowledgeItemMeta, { color: theme.colors.muted }]} numberOfLines={1}>
-              {source.file_name}
-            </Text>
-          ) : null}
-
-          <View style={styles.knowledgeItemFooter}>
-            <Text style={[styles.knowledgeItemChunks, { color: theme.colors.subtle }]}>
-              {source.chunk_count} chunk{source.chunk_count === 1 ? '' : 's'}
-            </Text>
-            {source.last_synced_at ? (
-              <Text style={[styles.knowledgeItemChunks, { color: theme.colors.subtle }]}>
-                Synced {new Date(source.last_synced_at).toLocaleDateString()}
-              </Text>
-            ) : null}
-            {source.processing_error ? (
-              <Text style={[styles.knowledgeItemChunks, { color: '#f87171' }]} numberOfLines={1}>
-                {source.processing_error}
-              </Text>
-            ) : null}
-          </View>
         </View>
-      ))}
+      ) : (
+        leads.map((lead) => {
+          const isSelected = selectedLeadId === lead.id;
 
-      {/* Pagination controls */}
-      {meta.last_page > 1 ? (
+          return (
+            <View key={lead.id}>
+              <Pressable
+                style={[
+                  styles.sessionCard,
+                  {
+                    backgroundColor: isSelected ? theme.colors.surface : theme.colors.card,
+                    borderColor: isSelected ? theme.colors.primary + '60' : theme.colors.border,
+                  },
+                ]}
+                onPress={() => handleLeadPress(lead)}
+              >
+                <View style={styles.sessionCardLeft}>
+                  <View style={[
+                    styles.sessionCardAvatar,
+                    { backgroundColor: isSelected ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isSelected ? theme.colors.primary + '44' : theme.colors.border },
+                  ]}>
+                    <Ionicons name="person" size={18} color={isSelected ? theme.colors.primary : theme.colors.muted} />
+                  </View>
+                </View>
+                <View style={styles.sessionCardBody}>
+                  <View style={styles.sessionCardTopRow}>
+                    <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                      {lead.name}
+                    </Text>
+                    <View style={[
+                      styles.sessionCardBadge,
+                      {
+                        backgroundColor: lead.status === 'new' ? theme.colors.primary + '22' : theme.colors.surface,
+                        borderColor: lead.status === 'new' ? theme.colors.primary + '44' : theme.colors.border,
+                      },
+                    ]}>
+                      <Text style={[styles.sessionCardBadgeText, { color: lead.status === 'new' ? theme.colors.primary : theme.colors.muted }]}>
+                        {capitalize(lead.status)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+                    {lead.user_request || lead.contact}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isSelected ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={theme.colors.subtle}
+                />
+              </Pressable>
+
+              {/* Inline detail panel */}
+              {isSelected ? (() => {
+                const parts = lead.contact.split(',').map((p) => p.trim());
+                const email = parts.find((p) => p.includes('@'));
+                const phone = parts.find((p) => /[0-9]{7,}/.test(p));
+                const userRequest = selectedLeadDetail?.user_request || lead.user_request;
+                const requestIsJustContact = userRequest
+                  ? parts.some((p) => userRequest.includes(p)) && parts.length > 1
+                  : false;
+
+                return (
+                  <View style={[styles.leadDetailPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    {/* Contact chips */}
+                    <View style={styles.leadContactRow}>
+                      {email ? (
+                        <View style={[styles.leadContactItem, { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5 }]}>
+                          <Ionicons name="mail-outline" size={12} color={theme.colors.muted} />
+                          <Text style={[styles.leadContactText, { color: theme.colors.text }]} numberOfLines={1}>{email}</Text>
+                        </View>
+                      ) : null}
+                      {phone ? (
+                        <View style={[styles.leadContactItem, { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5 }]}>
+                          <Ionicons name="call-outline" size={12} color={theme.colors.muted} />
+                          <Text style={[styles.leadContactText, { color: theme.colors.text }]}>{phone}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.leadTriggerBadge, { backgroundColor: theme.colors.primary + '18', borderColor: theme.colors.primary + '40' }]}>
+                        <Text style={[styles.leadTriggerText, { color: theme.colors.primary }]}>{capitalize(lead.trigger)}</Text>
+                      </View>
+                    </View>
+
+                    {loadingLeadId === lead.id ? (
+                      <ActivityIndicator color={theme.colors.primary} style={{ alignSelf: 'flex-start' }} />
+                    ) : (
+                      <>
+                        {userRequest && !requestIsJustContact ? (
+                          <View style={[styles.leadRequestBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                            <Text style={[styles.leadRequestLabel, { color: theme.colors.muted }]}>Request</Text>
+                            <Text style={[styles.leadRequestText, { color: theme.colors.text }]}>{userRequest}</Text>
+                          </View>
+                        ) : null}
+
+                        {selectedLeadDetail?.chat_session_id ? (
+                          <Pressable
+                            style={[styles.inlineActionButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                            onPress={openLinkedSession}
+                          >
+                            <Ionicons name="chatbubbles-outline" size={14} color={theme.colors.accent} />
+                            <Text style={[styles.inlineActionText, { color: theme.colors.accent }]}>
+                              {loadingLinkedMessages ? 'Loading...' : 'View conversation'}
+                            </Text>
+                          </Pressable>
+                        ) : null}
+
+                        {linkedMessages.length > 0 ? (
+                          <View style={styles.messagesColumn}>
+                            {linkedMessages.map((message) => (
+                              <View
+                                key={message.id}
+                                style={[
+                                  styles.messageBubble,
+                                  {
+                                    backgroundColor: message.role === 'assistant' ? theme.colors.card : theme.colors.primary,
+                                    borderColor: message.role === 'assistant' ? theme.colors.border : theme.colors.primary,
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.messageRole, { color: message.role === 'assistant' ? theme.colors.accent : theme.colors.primaryText }]}>
+                                  {message.role === 'assistant' ? 'AI' : 'Visitor'}
+                                </Text>
+                                <Text style={[styles.messageContent, { color: message.role === 'assistant' ? theme.colors.text : theme.colors.primaryText }]}>
+                                  {message.content}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                      </>
+                    )}
+
+                    {/* Status buttons */}
+                    <View style={styles.statusRow}>
+                      {(['new', 'contacted', 'closed'] as const).map((status) => (
+                        <Pressable
+                          key={status}
+                          style={[
+                            styles.statusButton,
+                            {
+                              backgroundColor: lead.status === status ? theme.colors.primary : theme.colors.card,
+                              borderColor: lead.status === status ? theme.colors.primary : theme.colors.border,
+                              opacity: savingLeadId === lead.id ? 0.65 : 1,
+                            },
+                          ]}
+                          disabled={savingLeadId === lead.id}
+                          onPress={() => changeStatus(lead, status)}
+                        >
+                          <Text style={[styles.statusButtonText, { color: lead.status === status ? theme.colors.primaryText : theme.colors.text }]}>
+                            {savingLeadId === lead.id && lead.status !== status ? 'Saving...' : capitalize(status)}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })() : null}
+            </View>
+          );
+        })
+      )}
+
+      {/* Pagination */}
+      {leadsMeta.last_page > 1 ? (
         <View style={styles.paginationRow}>
           <Pressable
-            style={[
-              styles.pageButton,
-              {
-                backgroundColor: meta.current_page <= 1 ? theme.colors.surface : theme.colors.card,
-                borderColor: theme.colors.border,
-                opacity: meta.current_page <= 1 || loadingPage ? 0.4 : 1,
-              },
-            ]}
-            disabled={meta.current_page <= 1 || loadingPage}
-            onPress={() => loadPage(meta.current_page - 1)}
+            style={[styles.pageButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, opacity: leadsMeta.current_page <= 1 || loadingPage ? 0.4 : 1 }]}
+            disabled={leadsMeta.current_page <= 1 || loadingPage}
+            onPress={() => loadPage(leadsMeta.current_page - 1)}
           >
             <Ionicons name="chevron-back" size={16} color={theme.colors.text} />
             <Text style={[styles.pageButtonText, { color: theme.colors.text }]}>Prev</Text>
           </Pressable>
 
           <Text style={[styles.pageIndicator, { color: theme.colors.muted }]}>
-            {loadingPage ? 'Loading...' : `${meta.current_page} of ${meta.last_page}`}
+            {loadingPage ? 'Loading...' : `${leadsMeta.current_page} of ${leadsMeta.last_page}`}
           </Text>
 
           <Pressable
-            style={[
-              styles.pageButton,
-              {
-                backgroundColor: !meta.has_more ? theme.colors.surface : theme.colors.card,
-                borderColor: theme.colors.border,
-                opacity: !meta.has_more || loadingPage ? 0.4 : 1,
-              },
-            ]}
-            disabled={!meta.has_more || loadingPage}
-            onPress={() => loadPage(meta.current_page + 1)}
+            style={[styles.pageButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, opacity: !leadsMeta.has_more || loadingPage ? 0.4 : 1 }]}
+            disabled={!leadsMeta.has_more || loadingPage}
+            onPress={() => loadPage(leadsMeta.current_page + 1)}
           >
             <Text style={[styles.pageButtonText, { color: theme.colors.text }]}>Next</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.text} />
           </Pressable>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+
+function formatRelativeTime(value?: string | null): string {
+  if (!value) {
+    return '--';
+  }
+
+  const date = new Date(value.endsWith('Z') ? value : value + 'Z');
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (diff < 60) {
+    return 'Just now';
+  }
+
+  if (diff < 3600) {
+    return `${Math.floor(diff / 60)}m ago`;
+  }
+
+  if (diff < 86400) {
+    return `${Math.floor(diff / 3600)}h ago`;
+  }
+
+  if (diff < 604800) {
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function HistoryTab({
+  sessions,
+  token,
+}: {
+  sessions: MobileSession[];
+  token: string;
+}) {
+  const scheme = useColorScheme();
+  const theme = getTheme(scheme);
+  const [selectedSession, setSelectedSession] = useState<MobileSession | null>(null);
+  const [messages, setMessages] = useState<MobileSessionMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openSession(session: MobileSession): Promise<void> {
+    setSelectedSession(session);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await getSessionMessages(token, session.id);
+      setMessages(data);
+    } catch (err) {
+      setMessages([]);
+      setError(resolveErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (selectedSession) {
+    return (
+      <View style={styles.sectionColumn}>
+        <Pressable style={styles.threadBackBtn} onPress={() => {
+          setSelectedSession(null);
+          setMessages([]);
+          setError(null);
+        }}>
+          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+          <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>History</Text>
+        </Pressable>
+
+        <View style={[styles.sectionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]} numberOfLines={1}>
+            {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Anonymous'}
+          </Text>
+          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
+            {selectedSession.message_count} messages · {formatRelativeTime(selectedSession.last_activity_at)}
+          </Text>
+        </View>
+
+        {error ? <ErrorBanner text={error} /> : null}
+
+        {loading ? (
+          <View style={styles.threadLoadingWrap}>
+            <ActivityIndicator color={theme.colors.primary} />
+            <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages...</Text>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.threadEmptyWrap}>
+            <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
+            <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages</Text>
+          </View>
+        ) : (
+          <View style={styles.messagesColumn}>
+            {messages.map((message) => {
+              const isVisitor = message.role === 'user';
+              const isHuman = message.role === 'assistant' && message.human_takeover;
+              const isAI = message.role === 'assistant' && !message.human_takeover;
+
+              return (
+                <View key={message.id} style={[styles.chatBubbleRow, isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}>
+                  {isVisitor ? (
+                    <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                      <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
+                    </View>
+                  ) : null}
+                  <View style={{ maxWidth: '75%', gap: 4 }}>
+                    <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
+                      {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
+                    </Text>
+                    <View style={[
+                      styles.chatBubble,
+                      isVisitor
+                        ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+                        : isHuman
+                        ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
+                        : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
+                    ]}>
+                      <Text style={[styles.chatBubbleText, { color: isVisitor ? theme.colors.text : '#ffffff' }]}>
+                        {message.content}
+                      </Text>
+                    </View>
+                  </View>
+                  {!isVisitor ? (
+                    <View style={[styles.chatAvatarSmall, { backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22', borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44' }]}>
+                      <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.sectionColumn}>
+      <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={{ gap: 4 }}>
+          <Text style={[styles.sessionsHeaderTitle, { color: theme.colors.text }]}>History</Text>
+          <Text style={[styles.sessionsHeaderSub, { color: theme.colors.muted }]}>
+            {sessions.length === 0 ? 'No past sessions' : `${sessions.length} past conversation${sessions.length === 1 ? '' : 's'}`}
+          </Text>
+        </View>
+      </View>
+
+      {sessions.length === 0 ? (
+        <View style={[styles.sessionsEmpty, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Ionicons name="time-outline" size={40} color={theme.colors.subtle} />
+          <Text style={[styles.sessionsEmptyTitle, { color: theme.colors.text }]}>No history yet</Text>
+          <Text style={[styles.sessionsEmptyBody, { color: theme.colors.muted }]}>
+            Past conversations will appear here once sessions end.
+          </Text>
+        </View>
+      ) : (
+        sessions.map((session) => {
+          const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
+          const preview = session.first_message || session.page_url || 'No preview';
+
+          return (
+            <Pressable
+              key={session.id}
+              style={[styles.sessionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+              onPress={() => openSession(session)}
+            >
+              <View style={styles.sessionCardLeft}>
+                <View style={[styles.sessionCardAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  <Ionicons name="person" size={18} color={theme.colors.muted} />
+                </View>
+              </View>
+              <View style={styles.sessionCardBody}>
+                <View style={styles.sessionCardTopRow}>
+                  <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                    {visitorName}
+                  </Text>
+                  <View style={[styles.sessionCardBadge, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <Text style={[styles.sessionCardBadgeText, { color: theme.colors.muted }]}>
+                      {session.message_count} msgs
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+                  {preview}
+                </Text>
+                <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]}>
+                  {formatRelativeTime(session.last_activity_at)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
+            </Pressable>
+          );
+        })
+      )}
     </View>
   );
 }
@@ -1832,37 +1993,6 @@ function ToggleRow({
   );
 }
 
-function CardRow({
-  title,
-  subtitle,
-  meta,
-}: {
-  title: string;
-  subtitle: string;
-  meta: string;
-}) {
-  const scheme = useColorScheme();
-  const theme = getTheme(scheme);
-
-  return (
-    <View
-      style={[
-        styles.sessionRow,
-        {
-          backgroundColor: theme.colors.card,
-          borderColor: theme.colors.border,
-        },
-      ]}
-    >
-      <View style={[styles.sessionDot, { backgroundColor: theme.colors.accent }]} />
-      <View style={styles.sessionCopy}>
-        <Text style={[styles.sessionName, { color: theme.colors.text }]}>{title}</Text>
-        <Text style={[styles.sessionDetail, { color: theme.colors.muted }]}>{subtitle}</Text>
-      </View>
-      <Text style={[styles.sessionStatus, { color: theme.colors.subtle }]}>{meta}</Text>
-    </View>
-  );
-}
 
 function ErrorBanner({ text, inset = false }: { text: string; inset?: boolean }) {
   const scheme = useColorScheme();
@@ -1951,36 +2081,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 16,
+    paddingBottom: 4,
   },
   appHeaderCopy: {
     flex: 1,
-    gap: 2,
+    gap: 3,
     paddingRight: 12,
   },
   appHeaderTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
+    fontFamily: 'Inter_800ExtraBold',
+    fontSize: 20,
+    letterSpacing: -0.5,
   },
   appHeaderSubtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
+    letterSpacing: 0.1,
   },
   refreshButton: {
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 100,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   refreshButtonText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
+    letterSpacing: 0.2,
   },
   tabBar: {
     flexDirection: 'row',
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 20,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   tabButton: {
     flex: 1,
@@ -1996,9 +2130,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabLabel: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 10,
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
   },
   loader: {
     flex: 1,
@@ -2157,9 +2291,9 @@ const styles = StyleSheet.create({
   },
   loginTitle: {
     fontFamily: 'Inter_800ExtraBold',
-    fontSize: 30,
-    lineHeight: 36,
-    letterSpacing: -0.8,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -1,
   },
   loginSubtitle: {
     fontFamily: 'Inter_400Regular',
@@ -2168,8 +2302,8 @@ const styles = StyleSheet.create({
   },
   loginCard: {
     borderWidth: 1,
-    borderRadius: 26,
-    padding: 18,
+    borderRadius: 24,
+    padding: 20,
     gap: 16,
   },
   fieldGroup: {
@@ -2181,7 +2315,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontFamily: 'Inter_500Medium',
@@ -2216,10 +2350,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 18,
     paddingVertical: 16,
-    borderRadius: 16,
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    borderRadius: 100,
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
   fullWidthSecondaryButton: {
@@ -2228,7 +2362,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 18,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 100,
     borderWidth: 1,
   },
   secondaryButton: {
@@ -2264,18 +2398,19 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderWidth: 1,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 20,
+    padding: 20,
     gap: 10,
   },
   sectionTitle: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: 'Inter_800ExtraBold',
     fontSize: 18,
+    letterSpacing: -0.4,
   },
   sectionIntro: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 22,
   },
   filePickerBlock: {
     gap: 10,
@@ -2321,14 +2456,14 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
+    borderRadius: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
   errorText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   // Session list
   sessionsHeader: {
@@ -2337,15 +2472,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderRadius: 20,
-    padding: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   sessionsHeaderTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
+    fontFamily: 'Inter_800ExtraBold',
+    fontSize: 20,
+    letterSpacing: -0.5,
   },
   sessionsHeaderSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
+    marginTop: 2,
   },
   liveChip: {
     flexDirection: 'row',
@@ -2364,23 +2502,37 @@ const styles = StyleSheet.create({
   },
   liveChipText: {
     fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  sessionsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingTop: 4,
+  },
+  sessionsSectionLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   sessionsEmpty: {
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
     borderRadius: 24,
-    padding: 40,
+    padding: 48,
   },
   sessionsEmptyTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 16,
+    letterSpacing: -0.3,
   },
   sessionsEmptyBody: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 21,
     textAlign: 'center',
   },
   sessionCard: {
@@ -2389,7 +2541,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderRadius: 20,
-    padding: 14,
+    padding: 16,
   },
   sessionCardLeft: {
     flexShrink: 0,
@@ -2452,7 +2604,7 @@ const styles = StyleSheet.create({
   // Thread / chat view
   threadScreen: {
     flex: 1,
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 20,
     paddingTop: 18,
   },
@@ -2469,7 +2621,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderRadius: 20,
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   threadBackBtn: {
     flexDirection: 'row',
@@ -2478,7 +2631,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   threadBackText: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     fontSize: 13,
   },
   threadHeaderCenter: {
@@ -2489,20 +2642,22 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   threadAvatar: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   threadHeaderName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: -0.2,
   },
   threadHeaderMeta: {
     fontFamily: 'Inter_400Regular',
     fontSize: 11,
+    marginTop: 1,
   },
   takeoverPill: {
     flexDirection: 'row',
@@ -2510,45 +2665,47 @@ const styles = StyleSheet.create({
     gap: 5,
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     flexShrink: 0,
   },
   takeoverPillText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontSize: 12,
+    letterSpacing: 0.2,
   },
   takeoverBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    borderRadius: 100,
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   takeoverBannerText: {
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
     flex: 1,
+    letterSpacing: 0.1,
   },
   threadLoadingWrap: {
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 32,
+    paddingVertical: 40,
   },
   threadLoadingText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Inter_500Medium',
     fontSize: 13,
   },
   threadEmptyWrap: {
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 40,
+    gap: 10,
+    paddingVertical: 48,
   },
   threadEmptyText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
   messagesColumn: {
     gap: 12,
@@ -2581,7 +2738,7 @@ const styles = StyleSheet.create({
   },
   chatBubble: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -2597,20 +2754,20 @@ const styles = StyleSheet.create({
   chatBubbleText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 22,
   },
   replyBox: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 10,
   },
   replyInput: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontFamily: 'Inter_400Regular',
@@ -2619,8 +2776,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   replySendBtn: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2629,15 +2786,16 @@ const styles = StyleSheet.create({
   takeoverCta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: 100,
+    paddingHorizontal: 20,
     paddingVertical: 14,
   },
   takeoverCtaText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
   },
   handBackBtn: {
     flexDirection: 'row',
@@ -2645,9 +2803,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: 100,
+    paddingHorizontal: 20,
     paddingVertical: 12,
+    marginBottom: 4,
   },
   handBackText: {
     fontFamily: 'Inter_600SemiBold',
@@ -2850,7 +3009,70 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
   },
+  leadDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  leadTriggerBadge: {
+    borderWidth: 1,
+    borderRadius: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  leadTriggerText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    textTransform: 'capitalize',
+  },
+  leadContactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  leadContactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  leadContactText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+  },
+  leadDetailPanel: {
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderRadius: 20,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    padding: 16,
+    gap: 12,
+    marginTop: -8,
+  },
+  leadRequestBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  leadRequestLabel: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  leadRequestText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 21,
+  },
   inlineActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,

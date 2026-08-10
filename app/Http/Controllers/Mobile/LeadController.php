@@ -12,14 +12,19 @@ class LeadController extends MobileController
     {
         $client = $this->currentClient($request);
 
-        $leads = $client->leads()
+        $paginated = $client->leads()
             ->latest()
-            ->limit(25)
-            ->get()
-            ->map(fn ($lead) => $this->transformLead($lead));
+            ->paginate(20);
 
         return response()->json([
-            'leads' => $leads,
+            'leads' => $paginated->map(fn ($lead) => $this->transformLead($lead)),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page'    => $paginated->lastPage(),
+                'per_page'     => $paginated->perPage(),
+                'total'        => $paginated->total(),
+                'has_more'     => $paginated->hasMorePages(),
+            ],
         ]);
     }
 

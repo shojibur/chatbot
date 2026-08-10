@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\LeadController as ApiLeadController;
 use App\Http\Controllers\Mobile\AuthController as MobileAuthController;
+use App\Http\Controllers\Mobile\PushTokenController as MobilePushTokenController;
 use App\Http\Controllers\Mobile\DashboardController as MobileDashboardController;
 use App\Http\Controllers\Mobile\KnowledgeSourceController as MobileKnowledgeSourceController;
 use App\Http\Controllers\Mobile\LeadController as MobileLeadController;
@@ -55,5 +56,7 @@ Route::prefix('mobile')->name('api.mobile.')->group(function () {
         Route::post('knowledge-sources/{knowledgeSource}/retry', [MobileKnowledgeSourceController::class, 'retry'])->name('knowledge-sources.retry');
         Route::get('settings', [MobileSettingsController::class, 'show'])->name('settings.show');
         Route::patch('settings/widget', [MobileSettingsController::class, 'updateWidget'])->name('settings.widget');
+        Route::post('push-token', [MobilePushTokenController::class, 'store'])->name('push-token.store');
+        Route::delete('push-token', [MobilePushTokenController::class, 'destroy'])->name('push-token.destroy');
     });
 });

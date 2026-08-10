@@ -150,11 +150,23 @@ export type MobilePaginatedKnowledge = {
   };
 };
 
+export type MobilePaginatedLeads = {
+  leads: MobileLead[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    has_more: boolean;
+  };
+};
+
 export type MobileAppBootstrap = {
   me: MobileUserContext;
   dashboard: MobileDashboard;
   sessions: MobileSession[];
   leads: MobileLead[];
+  leadsMeta: MobilePaginatedLeads['meta'];
   knowledgeSources: MobileKnowledgeSource[];
   knowledgeMeta: MobilePaginatedKnowledge['meta'];
   settings: MobileSettingsPayload;
@@ -191,7 +203,7 @@ export async function loadMobileAppData(token: string): Promise<MobileAppBootstr
     request<MobileUserContext>('/me', { token }),
     request<MobileDashboard>('/dashboard', { token }),
     request<{ sessions: MobileSession[] }>('/sessions', { token }),
-    request<{ leads: MobileLead[] }>('/leads', { token }),
+    request<MobilePaginatedLeads>('/leads', { token }),
     request<MobilePaginatedKnowledge>('/knowledge-sources', { token }),
     request<MobileSettingsPayload>('/settings', { token }),
   ]);
@@ -205,14 +217,38 @@ export async function loadMobileAppData(token: string): Promise<MobileAppBootstr
     has_more: false,
   };
 
+  const leadsData = leads as MobilePaginatedLeads;
+  const leadsMeta: MobilePaginatedLeads['meta'] = leadsData.meta ?? {
+    current_page: 1,
+    last_page: 1,
+    per_page: 20,
+    total: (leadsData.leads ?? []).length,
+    has_more: false,
+  };
+
   return {
     me,
     dashboard,
     sessions: sessions.sessions,
-    leads: leads.leads,
+    leads: leadsData.leads ?? [],
+    leadsMeta,
     knowledgeSources,
     knowledgeMeta,
     settings,
+  };
+}
+
+export async function fetchLeadsPage(token: string, page: number): Promise<MobilePaginatedLeads> {
+  const raw = await request<MobilePaginatedLeads>(`/leads?page=${page}`, { token });
+  return {
+    leads: raw.leads ?? [],
+    meta: raw.meta ?? {
+      current_page: page,
+      last_page: 1,
+      per_page: 20,
+      total: (raw.leads ?? []).length,
+      has_more: false,
+    },
   };
 }
 
@@ -331,6 +367,21 @@ export async function createKnowledgeSource(
 
 export async function deleteKnowledgeSource(token: string, id: number): Promise<void> {
   await request(`/knowledge-sources/${id}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function savePushToken(token: string, fcmToken: string): Promise<void> {
+  await request('/push-token', {
+    method: 'POST',
+    token,
+    body: { fcm_token: fcmToken },
+  });
+}
+
+export async function deletePushToken(token: string): Promise<void> {
+  await request('/push-token', {
     method: 'DELETE',
     token,
   });

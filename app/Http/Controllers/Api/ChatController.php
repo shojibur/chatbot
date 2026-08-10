@@ -12,6 +12,7 @@ use App\Services\AiModelCatalog;
 use App\Services\ChatHistoryService;
 use App\Services\ConversationCacheService;
 use App\Services\LeadCaptureService;
+use App\Services\PushNotificationService;
 use App\Services\RetrievalService;
 use App\Services\VisitorMessagePolicyService;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +33,7 @@ class ChatController extends Controller
         private readonly ConversationCacheService $cacheService,
         private readonly ChatHistoryService $chatHistoryService,
         private readonly LeadCaptureService $leadCaptureService,
+        private readonly PushNotificationService $pushNotificationService,
         private readonly VisitorMessagePolicyService $messagePolicyService,
         private readonly AiClientFactory $aiClientFactory,
         private readonly AiModelCatalog $modelCatalog,
@@ -66,9 +68,14 @@ class ChatController extends Controller
 
         // Resolve or create a chat session, then fetch prior history BEFORE logging
         // so that history only contains previous turns, not the current message.
+        $isNewSession = ! $request->input('session_token');
         $chatSession = $this->chatHistoryService->resolveSession($client, $request);
         $recentHistory = $this->chatHistoryService->getRecentHistory($chatSession);
         $this->chatHistoryService->logUserMessage($chatSession, $message);
+
+        if ($isNewSession) {
+            $this->pushNotificationService->newSession($client);
+        }
 
         // Auto-release stale takeovers — if the human hasn't been active for 15+ minutes, resume AI.
         if ($chatSession->is_human_takeover && $chatSession->last_activity_at?->lt(now()->subMinutes(5))) {
@@ -96,6 +103,9 @@ class ChatController extends Controller
                     false,
                     ['source' => 'takeover_notice'],
                 );
+            } else {
+                // Visitor is replying while human has takeover — ping the operator
+                $this->pushNotificationService->visitorRepliedDuringTakeover($client, $chatSession->id);
             }
 
             return response()->json([
@@ -254,6 +264,9 @@ class ChatController extends Controller
                 $leadPayload,
                 $message,
             );
+
+            $leadName = $leadPayload['name'] ?? 'Someone';
+            $this->pushNotificationService->newLead($client, $leadName);
         }
 
         // Cache the response AFTER removing any AI-only lead payload.
