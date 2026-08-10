@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Contract\Messaging;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
@@ -44,26 +45,46 @@ class PushNotificationService
 
     private function notifyClientUsers(Client $client, array $payload): void
     {
+        $context = [
+            'client_id'   => $client->id,
+            'client_name' => $client->name,
+            'type'        => $payload['data']['type'] ?? 'unknown',
+            'title'       => $payload['title'],
+        ];
+
         $tokens = User::where('client_id', $client->id)
             ->whereNotNull('fcm_token')
-            ->pluck('fcm_token')
+            ->pluck('fcm_token', 'email')
             ->all();
 
         if (empty($tokens)) {
+            Log::channel('single')->info('[Push] Skipped — no FCM tokens registered', $context);
             return;
         }
 
-        $notification = Notification::create($payload['title'], $payload['body']);
+        Log::channel('single')->info('[Push] Sending to ' . count($tokens) . ' device(s)', $context);
 
-        foreach ($tokens as $token) {
+        foreach ($tokens as $email => $token) {
             try {
-                $message = CloudMessage::withTarget('token', $token)
-                    ->withNotification($notification)
+                $message = CloudMessage::new()
+                    ->toToken($token)
+                    ->withNotification(Notification::create($payload['title'], $payload['body']))
                     ->withData($payload['data']);
 
                 $this->messaging->send($message);
-            } catch (Throwable) {
-                // Stale token — ignore, will be overwritten on next login
+
+                Log::channel('single')->info('[Push] Sent OK', [
+                    ...$context,
+                    'recipient' => $email,
+                    'token_preview' => substr($token, 0, 20) . '...',
+                ]);
+            } catch (Throwable $e) {
+                Log::channel('single')->error('[Push] Failed', [
+                    ...$context,
+                    'recipient' => $email,
+                    'token_preview' => substr($token, 0, 20) . '...',
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
     }
