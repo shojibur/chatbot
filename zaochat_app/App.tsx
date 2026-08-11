@@ -990,14 +990,53 @@ function SessionsTab({
     );
   }
 
-  // Session list view
-  const liveSessions = sessions.filter((s) => s.is_human_takeover);
-  const historySessions = sessions.filter((s) => !s.is_human_takeover);
+  // Session list view — "live" means active visitor OR human has taken over
+  const liveSessions = sessions.filter((s) => s.is_human_takeover || s.is_active);
+  const historySessions = sessions.filter((s) => !s.is_human_takeover && !s.is_active);
 
   function renderSessionCard(session: MobileSession) {
-    const isLive = session.is_human_takeover;
+    const isTakenOver = session.is_human_takeover;
+    const isActive = session.is_active;
     const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
     const preview = session.first_message || session.page_url || 'No preview';
+
+    // Colour logic: taken-over = primary brand, active-visitor = orange/amber, history = grey
+    const cardBorderColor = isTakenOver
+      ? theme.colors.primary + '60'
+      : isActive
+        ? '#f59e0b60'
+        : theme.colors.border;
+    const avatarBg = isTakenOver
+      ? theme.colors.primary + '22'
+      : isActive
+        ? '#f59e0b22'
+        : theme.colors.surface;
+    const avatarBorder = isTakenOver
+      ? theme.colors.primary + '44'
+      : isActive
+        ? '#f59e0b44'
+        : theme.colors.border;
+    const avatarIconColor = isTakenOver
+      ? theme.colors.primary
+      : isActive
+        ? '#f59e0b'
+        : theme.colors.muted;
+    const badgeBg = isTakenOver
+      ? theme.colors.primary + '22'
+      : isActive
+        ? '#f59e0b22'
+        : theme.colors.surface;
+    const badgeBorder = isTakenOver
+      ? theme.colors.primary + '44'
+      : isActive
+        ? '#f59e0b44'
+        : theme.colors.border;
+    const badgeText = isTakenOver
+      ? theme.colors.primary
+      : isActive
+        ? '#f59e0b'
+        : theme.colors.muted;
+    const badgeLabel = isTakenOver ? "You're live" : isActive ? 'Active now' : `${session.message_count} msgs`;
 
     return (
       <Pressable
@@ -1006,19 +1045,20 @@ function SessionsTab({
           styles.sessionCard,
           {
             backgroundColor: theme.colors.card,
-            borderColor: isLive ? theme.colors.primary + '60' : theme.colors.border,
+            borderColor: cardBorderColor,
           },
-          isLive && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+          isTakenOver && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+          isActive && !isTakenOver && { shadowColor: '#f59e0b', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
         ]}
         onPress={() => openSession(session)}
       >
         <View style={styles.sessionCardLeft}>
           <View style={[
             styles.sessionCardAvatar,
-            { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+            { backgroundColor: avatarBg, borderColor: avatarBorder },
           ]}>
-            <Ionicons name="person" size={18} color={isLive ? theme.colors.primary : theme.colors.muted} />
-            {isLive ? <View style={styles.sessionCardLiveDot} /> : null}
+            <Ionicons name="person" size={18} color={avatarIconColor} />
+            {(isTakenOver || isActive) ? <View style={[styles.sessionCardLiveDot, isActive && !isTakenOver && { backgroundColor: '#f59e0b' }]} /> : null}
           </View>
         </View>
 
@@ -1029,10 +1069,10 @@ function SessionsTab({
             </Text>
             <View style={[
               styles.sessionCardBadge,
-              { backgroundColor: isLive ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isLive ? theme.colors.primary + '44' : theme.colors.border },
+              { backgroundColor: badgeBg, borderColor: badgeBorder },
             ]}>
-              <Text style={[styles.sessionCardBadgeText, { color: isLive ? theme.colors.primary : theme.colors.muted }]}>
-                {isLive ? 'You\'re live' : `${session.message_count} msgs`}
+              <Text style={[styles.sessionCardBadgeText, { color: badgeText }]}>
+                {badgeLabel}
               </Text>
             </View>
           </View>
@@ -1069,7 +1109,9 @@ function SessionsTab({
               <View style={styles.sessionsSectionHeader}>
                 <View style={[styles.liveChip, { backgroundColor: '#4ade8022', borderColor: '#4ade8055' }]}>
                   <View style={styles.liveDot} />
-                  <Text style={[styles.liveChipText, { color: '#4ade80' }]}>{liveSessions.length} Live</Text>
+                  <Text style={[styles.liveChipText, { color: '#4ade80' }]}>
+                    {liveSessions.length} Active
+                  </Text>
                 </View>
               </View>
               {liveSessions.map(renderSessionCard)}

@@ -12,6 +12,7 @@ export type MobileSession = {
   last_activity_at: string | null;
   created_at: string | null;
   first_message: string | null;
+  is_active: boolean;
   is_human_takeover: boolean;
   taken_over_by_user_id: number | null;
   taken_over_at: string | null;

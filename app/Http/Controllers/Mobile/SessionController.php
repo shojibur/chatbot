@@ -182,6 +182,9 @@ class SessionController extends MobileController
 
     protected function transformSession(ChatSession $session, array $extra = []): array
     {
+        $lastActivity = $session->last_activity_at;
+        $isActive = $lastActivity && $lastActivity->gt(now()->subMinutes(10));
+
         return [
             'id' => $session->id,
             'session_token' => $session->session_token,
@@ -191,8 +194,9 @@ class SessionController extends MobileController
             'user_agent' => $session->user_agent,
             'message_count' => $session->message_count,
             'total_tokens' => $session->total_tokens,
-            'last_activity_at' => $session->last_activity_at?->toISOString(),
+            'last_activity_at' => $lastActivity?->toISOString(),
             'created_at' => $session->created_at?->toISOString(),
+            'is_active' => $isActive,
             'is_human_takeover' => (bool) $session->is_human_takeover,
             'taken_over_by_user_id' => $session->taken_over_by_user_id,
             'taken_over_at' => $session->taken_over_at?->toISOString(),
