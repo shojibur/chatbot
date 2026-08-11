@@ -84,6 +84,13 @@ Route::middleware(['auth', 'verified', \App\Http\Middleware\EnsureUserIsClient::
     Route::get('chat-history', [\App\Http\Controllers\Portal\ChatHistoryController::class, 'index'])->name('chat-history');
     Route::get('chat-history/{session}/messages', [\App\Http\Controllers\Portal\ChatHistoryController::class, 'messages'])->name('chat-history.messages');
 
+    // Live Sessions (human takeover)
+    Route::get('live-sessions', [\App\Http\Controllers\Portal\LiveSessionsController::class, 'index'])->name('live-sessions');
+    Route::get('live-sessions/{session}/messages', [\App\Http\Controllers\Portal\LiveSessionsController::class, 'messages'])->name('live-sessions.messages');
+    Route::post('live-sessions/{session}/takeover', [\App\Http\Controllers\Portal\LiveSessionsController::class, 'takeover'])->name('live-sessions.takeover');
+    Route::post('live-sessions/{session}/release', [\App\Http\Controllers\Portal\LiveSessionsController::class, 'releaseTakeover'])->name('live-sessions.release');
+    Route::post('live-sessions/{session}/send-message', [\App\Http\Controllers\Portal\LiveSessionsController::class, 'sendMessage'])->name('live-sessions.send-message');
+
     // Leads
     Route::get('leads', [\App\Http\Controllers\Portal\LeadController::class, 'index'])->name('leads.index');
     Route::get('leads/{lead}', [\App\Http\Controllers\Portal\LeadController::class, 'show'])->name('leads.show');
