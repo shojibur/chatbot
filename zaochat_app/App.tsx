@@ -590,15 +590,12 @@ function AppShell({
 }: AppShellProps) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
-  const [sessionThreadOpen, setSessionThreadOpen] = useState(false);
 
   const tabContent = activeTab === 'sessions' ? (
     <SessionsTab
       sessions={appData.sessions.filter((s) => s.is_human_takeover || s.is_active)}
       token={token}
       onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
-      onThreadOpen={() => setSessionThreadOpen(true)}
-      onThreadClose={() => setSessionThreadOpen(false)}
     />
   ) : activeTab === 'history' ? (
     <HistoryTab
@@ -648,13 +645,7 @@ function AppShell({
 
       {appError ? <ErrorBanner text={appError} inset /> : null}
 
-      {sessionThreadOpen ? (
-        <View style={{ flex: 1 }}>{tabContent}</View>
-      ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {tabContent}
-        </ScrollView>
-      )}
+      <View style={{ flex: 1 }}>{tabContent}</View>
 
       <View
         style={[
@@ -708,14 +699,10 @@ function SessionsTab({
   sessions,
   token,
   onSessionsChange,
-  onThreadOpen,
-  onThreadClose,
 }: {
   sessions: MobileSession[];
   token: string;
   onSessionsChange: (sessions: MobileSession[]) => void;
-  onThreadOpen: () => void;
-  onThreadClose: () => void;
 }) {
   const scheme = useColorScheme();
   const theme = getTheme(scheme);
@@ -800,7 +787,6 @@ function SessionsTab({
 
   async function openSession(session: MobileSession): Promise<void> {
     setSelectedSession(session);
-    onThreadOpen();
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -868,7 +854,6 @@ function SessionsTab({
             setMessages([]);
             setError(null);
             setSuccess(null);
-            onThreadClose();
           }}>
             <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
             <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>Sessions</Text>
@@ -1052,7 +1037,6 @@ function SessionsTab({
                 setMessages([]);
                 setError(null);
                 setSuccess(null);
-                onThreadClose();
               }}
             >
               <Ionicons name="hardware-chip-outline" size={15} color={theme.colors.muted} />
@@ -1178,6 +1162,7 @@ function SessionsTab({
   }
 
   return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
     <View style={styles.sectionColumn}>
       {sessions.length === 0 ? (
         <View style={[styles.sessionsEmpty, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -1216,6 +1201,7 @@ function SessionsTab({
         </>
       )}
     </View>
+    </ScrollView>
   );
 }
 
@@ -1327,6 +1313,7 @@ function LeadsTab({
   }
 
   return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
     <View style={styles.sectionColumn}>
       {/* Header */}
       <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -1542,6 +1529,7 @@ function LeadsTab({
         </View>
       ) : null}
     </View>
+    </ScrollView>
   );
 }
 
@@ -1591,104 +1579,178 @@ function HistoryTab({
     setSelectedSession(session);
     setLoading(true);
     setError(null);
+    setMessages([]);
 
     try {
       const data = await getSessionMessages(token, session.id);
       setMessages(data);
     } catch (err) {
-      setMessages([]);
       setError(resolveErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
-  if (selectedSession) {
-    return (
-      <View style={styles.sectionColumn}>
-        <Pressable style={styles.threadBackBtn} onPress={() => {
-          setSelectedSession(null);
-          setMessages([]);
-          setError(null);
-        }}>
-          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-          <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>History</Text>
-        </Pressable>
+  function closeSession(): void {
+    setSelectedSession(null);
+    setMessages([]);
+    setError(null);
+  }
 
-        <View style={[styles.sectionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]} numberOfLines={1}>
-            {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Anonymous'}
-          </Text>
-          <Text style={[styles.sectionIntro, { color: theme.colors.muted }]}>
-            {selectedSession.message_count} messages · {formatRelativeTime(selectedSession.last_activity_at)}
-          </Text>
+  // ── Thread view ─────────────────────────────────────────────────────────────
+  if (selectedSession) {
+    const hadHumanTakeover = messages.some((m) => m.human_takeover);
+    const visibleMessages = messages.filter((m) => m.source !== 'takeover_notice');
+
+    return (
+      <View style={styles.threadScreen}>
+        {/* Header */}
+        <View style={[styles.threadHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <Pressable style={styles.threadBackBtn} onPress={closeSession}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+            <Text style={[styles.threadBackText, { color: theme.colors.primary }]}>History</Text>
+          </Pressable>
+
+          <View style={styles.threadHeaderCenter}>
+            <View style={[styles.threadAvatar, { backgroundColor: theme.colors.surface }]}>
+              <Ionicons name="person" size={16} color={theme.colors.muted} />
+            </View>
+            <View style={{ gap: 1 }}>
+              <Text style={[styles.threadHeaderName, { color: theme.colors.text }]} numberOfLines={1}>
+                {selectedSession.visitor_identifier || selectedSession.visitor_ip || 'Anonymous'}
+              </Text>
+              <Text style={[styles.threadHeaderMeta, { color: theme.colors.muted }]}>
+                {selectedSession.message_count} messages · {formatRelativeTime(selectedSession.last_activity_at)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Human takeover badge */}
+          {hadHumanTakeover ? (
+            <View style={[styles.takeoverPill, { backgroundColor: theme.colors.accent + '22', borderColor: theme.colors.accent + '55' }]}>
+              <Ionicons name="person" size={11} color={theme.colors.accent} />
+              <Text style={[styles.takeoverPillText, { color: theme.colors.accent }]}>Human</Text>
+            </View>
+          ) : (
+            <View style={[styles.takeoverPill, { backgroundColor: theme.colors.primary + '18', borderColor: theme.colors.primary + '40' }]}>
+              <Ionicons name="hardware-chip-outline" size={11} color={theme.colors.primary} />
+              <Text style={[styles.takeoverPillText, { color: theme.colors.primary }]}>AI</Text>
+            </View>
+          )}
         </View>
+
+        {/* Page URL strip */}
+        {selectedSession.page_url ? (
+          <View style={[styles.historyUrlStrip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <Ionicons name="globe-outline" size={11} color={theme.colors.subtle} />
+            <Text style={[styles.historyUrlText, { color: theme.colors.subtle }]} numberOfLines={1}>
+              {selectedSession.page_url}
+            </Text>
+          </View>
+        ) : null}
 
         {error ? <ErrorBanner text={error} /> : null}
 
-        {loading ? (
-          <View style={styles.threadLoadingWrap}>
-            <ActivityIndicator color={theme.colors.primary} />
-            <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages...</Text>
-          </View>
-        ) : messages.length === 0 ? (
-          <View style={styles.threadEmptyWrap}>
-            <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
-            <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages</Text>
-          </View>
-        ) : (
-          <View style={styles.messagesColumn}>
-            {messages.map((message) => {
-              const isVisitor = message.role === 'user';
-              const isHuman = message.role === 'assistant' && message.human_takeover;
-              const isAI = message.role === 'assistant' && !message.human_takeover;
+        {/* Messages */}
+        <ScrollView
+          style={styles.threadScrollArea}
+          contentContainerStyle={styles.threadScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading ? (
+            <View style={styles.threadLoadingWrap}>
+              <ActivityIndicator color={theme.colors.primary} />
+              <Text style={[styles.threadLoadingText, { color: theme.colors.muted }]}>Loading messages…</Text>
+            </View>
+          ) : visibleMessages.length === 0 ? (
+            <View style={styles.threadEmptyWrap}>
+              <Ionicons name="chatbubbles-outline" size={36} color={theme.colors.subtle} />
+              <Text style={[styles.threadEmptyText, { color: theme.colors.muted }]}>No messages recorded</Text>
+            </View>
+          ) : (
+            <View style={styles.messagesColumn}>
+              {visibleMessages.map((message) => {
+                const isVisitor = message.role === 'user';
+                const isHuman = message.role === 'assistant' && message.human_takeover;
 
-              return (
-                <View key={message.id} style={[styles.chatBubbleRow, isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}>
-                  {isVisitor ? (
-                    <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                      <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
-                    </View>
-                  ) : null}
-                  <View style={{ maxWidth: '75%', gap: 4 }}>
-                    <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
-                      {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
-                    </Text>
-                    <View style={[
-                      styles.chatBubble,
-                      isVisitor
-                        ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
-                        : isHuman
-                        ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
-                        : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
-                    ]}>
-                      <Text style={[styles.chatBubbleText, { color: isVisitor ? theme.colors.text : '#ffffff' }]}>
-                        {message.content}
+                return (
+                  <View
+                    key={message.id}
+                    style={[styles.chatBubbleRow, isVisitor ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}
+                  >
+                    {isVisitor ? (
+                      <View style={[styles.chatAvatarSmall, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                        <Ionicons name="person-outline" size={11} color={theme.colors.muted} />
+                      </View>
+                    ) : null}
+
+                    <View style={{ maxWidth: '75%', gap: 3 }}>
+                      <Text style={[styles.chatSenderLabel, {
+                        color: isHuman ? theme.colors.accent : isVisitor ? theme.colors.muted : theme.colors.primary,
+                        textAlign: isVisitor ? 'left' : 'right',
+                      }]}>
+                        {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'Agent') : 'ZaoChat AI'}
                       </Text>
+
+                      <View style={[
+                        styles.chatBubble,
+                        isVisitor
+                          ? [styles.chatBubbleVisitor, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]
+                          : isHuman
+                          ? [styles.chatBubbleHuman, { backgroundColor: theme.colors.accent + 'ee', borderColor: theme.colors.accent }]
+                          : [styles.chatBubbleAI, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }],
+                      ]}>
+                        <Text style={[styles.chatBubbleText, { color: isVisitor ? theme.colors.text : '#ffffff' }]}>
+                          {message.content}
+                        </Text>
+                      </View>
+
+                      {message.created_at ? (
+                        <Text style={{ fontSize: 10, color: theme.colors.subtle, textAlign: isVisitor ? 'left' : 'right', paddingHorizontal: 2 }}>
+                          {formatRelativeTime(message.created_at)}
+                        </Text>
+                      ) : null}
                     </View>
+
+                    {!isVisitor ? (
+                      <View style={[styles.chatAvatarSmall, {
+                        backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22',
+                        borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44',
+                      }]}>
+                        <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
+                      </View>
+                    ) : null}
                   </View>
-                  {!isVisitor ? (
-                    <View style={[styles.chatAvatarSmall, { backgroundColor: isHuman ? theme.colors.accent + '22' : theme.colors.primary + '22', borderColor: isHuman ? theme.colors.accent + '44' : theme.colors.primary + '44' }]}>
-                      <Ionicons name={isHuman ? 'person' : 'hardware-chip-outline'} size={11} color={isHuman ? theme.colors.accent : theme.colors.primary} />
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        )}
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Read-only footer */}
+        <View style={[styles.historyReadOnlyBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Ionicons name="lock-closed-outline" size={13} color={theme.colors.subtle} />
+          <Text style={[styles.historyReadOnlyText, { color: theme.colors.subtle }]}>Read-only — session has ended</Text>
+        </View>
       </View>
     );
   }
 
+  // ── Session list ────────────────────────────────────────────────────────────
   return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
     <View style={styles.sectionColumn}>
+      {/* Header */}
       <View style={[styles.sessionsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
         <View style={{ gap: 4 }}>
           <Text style={[styles.sessionsHeaderTitle, { color: theme.colors.text }]}>History</Text>
           <Text style={[styles.sessionsHeaderSub, { color: theme.colors.muted }]}>
             {sessions.length === 0 ? 'No past sessions' : `${sessions.length} past conversation${sessions.length === 1 ? '' : 's'}`}
           </Text>
+        </View>
+        <View style={[styles.takeoverPill, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Ionicons name="time-outline" size={12} color={theme.colors.muted} />
+          <Text style={[styles.takeoverPillText, { color: theme.colors.muted }]}>Ended</Text>
         </View>
       </View>
 
@@ -1703,43 +1765,61 @@ function HistoryTab({
       ) : (
         sessions.map((session) => {
           const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
-          const preview = session.first_message || session.page_url || 'No preview';
+          const preview = session.first_message || 'No preview';
+          const domain = session.page_url
+            ? (() => { try { return new URL(session.page_url).hostname; } catch { return session.page_url; } })()
+            : null;
 
           return (
             <Pressable
               key={session.id}
-              style={[styles.sessionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+              style={[styles.historyCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
               onPress={() => openSession(session)}
             >
-              <View style={styles.sessionCardLeft}>
-                <View style={[styles.sessionCardAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  <Ionicons name="person" size={18} color={theme.colors.muted} />
-                </View>
+              {/* Left avatar */}
+              <View style={[styles.sessionCardAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, flexShrink: 0 }]}>
+                <Ionicons name="person" size={18} color={theme.colors.muted} />
               </View>
-              <View style={styles.sessionCardBody}>
-                <View style={styles.sessionCardTopRow}>
-                  <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+
+              {/* Body */}
+              <View style={{ flex: 1, gap: 5, minWidth: 0 }}>
+                {/* Row 1: name + time */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Text style={[styles.sessionCardName, { color: theme.colors.text, flex: 1 }]} numberOfLines={1}>
                     {visitorName}
                   </Text>
-                  <View style={[styles.sessionCardBadge, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                    <Text style={[styles.sessionCardBadgeText, { color: theme.colors.muted }]}>
-                      {session.message_count} msgs
-                    </Text>
-                  </View>
+                  <Text style={{ fontSize: 11, color: theme.colors.subtle, flexShrink: 0 }}>
+                    {formatRelativeTime(session.last_activity_at)}
+                  </Text>
                 </View>
-                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+
+                {/* Row 2: first message preview */}
+                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={2}>
                   {preview}
                 </Text>
-                <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]}>
-                  {formatRelativeTime(session.last_activity_at)}
-                </Text>
+
+                {/* Row 3: chips */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <View style={[styles.historyChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <Ionicons name="chatbubble-outline" size={10} color={theme.colors.muted} />
+                    <Text style={[styles.historyChipText, { color: theme.colors.muted }]}>{session.message_count} msgs</Text>
+                  </View>
+                  {domain ? (
+                    <View style={[styles.historyChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                      <Ionicons name="globe-outline" size={10} color={theme.colors.muted} />
+                      <Text style={[styles.historyChipText, { color: theme.colors.muted }]} numberOfLines={1}>{domain}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
+
+              <Ionicons name="chevron-forward" size={15} color={theme.colors.subtle} />
             </Pressable>
           );
         })
       )}
     </View>
+    </ScrollView>
   );
 }
 
@@ -1820,6 +1900,7 @@ function SettingsTab({
   }
 
   return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
     <View style={styles.sectionColumn}>
       {/* Profile card */}
       <View
@@ -2005,6 +2086,7 @@ function SettingsTab({
         <Text style={[styles.primaryButtonText, { color: theme.colors.text }]}>Logout</Text>
       </Pressable>
     </View>
+    </ScrollView>
   );
 }
 
@@ -2656,6 +2738,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 24,
     padding: 48,
+  },
+  // History tab
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+  },
+  historyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  historyChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  historyUrlStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  historyUrlText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    flex: 1,
+  },
+  historyReadOnlyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    paddingVertical: 12,
+  },
+  historyReadOnlyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
   },
   sessionsEmptyTitle: {
     fontFamily: 'Inter_700Bold',
