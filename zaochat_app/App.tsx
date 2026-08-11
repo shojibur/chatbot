@@ -7,6 +7,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
@@ -56,19 +57,24 @@ import { getTheme } from './src/theme';
 const logo = require('./assets/splash-icon.png');
 const TOKEN_STORAGE_KEY = 'zaochat.mobile.auth_token';
 
-// Show notifications even when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Push notifications are not supported in Expo Go since SDK 53.
+// Only initialise the handler and registration in standalone/dev-client builds.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 async function registerForPushNotifications(): Promise<string | null> {
-  if (!Device.isDevice) {
+  if (isExpoGo || !Device.isDevice) {
     return null;
   }
 
@@ -84,9 +90,13 @@ async function registerForPushNotifications(): Promise<string | null> {
     return null;
   }
 
-  const result = await Notifications.getDevicePushTokenAsync();
+  try {
+    const result = await Notifications.getDevicePushTokenAsync();
 
-  return result.data;
+    return result.data as string;
+  } catch {
+    return null;
+  }
 }
 
 type Screen = 'splash' | 'onboarding' | 'login' | 'app';
