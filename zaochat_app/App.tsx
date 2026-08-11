@@ -57,6 +57,11 @@ import { getTheme } from './src/theme';
 const logo = require('./assets/splash-icon.png');
 const TOKEN_STORAGE_KEY = 'zaochat.mobile.auth_token';
 
+// Module-level callback so the notification listener (in App) can instantly
+// trigger a message refresh inside SessionsTab when a takeover_reply arrives.
+// Reassigned at runtime by SessionsTab — must be let, not const.
+let onPushRefresh: (() => void) | null = null; // NOSONAR
+
 // Push notifications are not supported in Expo Go since SDK 53.
 // Only initialise the handler and registration in standalone/dev-client builds.
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
@@ -139,9 +144,13 @@ export default function App() {
 
   // Set up notification listeners once on mount
   useEffect(() => {
-    // Received while app is foregrounded
-    notificationListener.current = Notifications.addNotificationReceivedListener(() => {
-      // Nothing needed — handler above already shows the alert
+    // Received while app is foregrounded — immediately refresh open thread
+    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
+      const type = (notification.request.content.data as Record<string, string>)?.type;
+
+      if (type === 'new_session' || type === 'takeover_reply') {
+        onPushRefresh?.();
+      }
     });
 
     // User tapped a notification
@@ -718,6 +727,71 @@ function SessionsTab({
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedSessionRef = useRef<MobileSession | null>(null);
+
+  // Keep ref in sync so the poll callback always sees latest session
+  selectedSessionRef.current = selectedSession;
+
+  function stopPolling(): void {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function startPolling(): void {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      const session = selectedSessionRef.current;
+
+      if (!session) {
+        return;
+      }
+
+      try {
+        const data = await getSessionMessages(token, session.id);
+
+        setMessages((prev) => {
+          if (data.length !== prev.length) {
+            return data;
+          }
+
+          const lastPrev = prev[prev.length - 1];
+          const lastNew = data[data.length - 1];
+
+          if (lastPrev?.id !== lastNew?.id) {
+            return data;
+          }
+
+          return prev;
+        });
+      } catch {
+        // silent — keep showing existing messages
+      }
+    }, 3000);
+  }
+
+  // Clean up poll on unmount
+  useEffect(() => () => {
+    stopPolling();
+    onPushRefresh = null;
+  }, []);
+
+  // Register a push-triggered instant refresh so FCM wakes the thread immediately
+  useEffect(() => {
+    onPushRefresh = () => {
+      const session = selectedSessionRef.current;
+
+      if (!session) {
+        return;
+      }
+
+      getSessionMessages(token, session.id)
+        .then((data) => setMessages(data))
+        .catch(() => {});
+    };
+  }, [token]);
 
   function syncSession(updated: MobileSession): void {
     onSessionsChange(sessions.map((item) => (item.id === updated.id ? updated : item)));
@@ -734,6 +808,7 @@ function SessionsTab({
     try {
       const data = await getSessionMessages(token, session.id);
       setMessages(data);
+      startPolling();
     } catch (err) {
       setMessages([]);
       setError(resolveErrorMessage(err));
@@ -755,11 +830,6 @@ function SessionsTab({
         : await takeoverSession(token, selectedSession.id);
 
       syncSession(updated);
-      setSuccess(
-        updated.is_human_takeover
-          ? 'Human takeover is active for this session.'
-          : 'AI replies restored for this session.',
-      );
     } catch (err) {
       setError(resolveErrorMessage(err));
     } finally {
@@ -779,7 +849,6 @@ function SessionsTab({
       syncSession(response.session);
       setMessages((current) => [...current, response.message]);
       setReplyText('');
-      setSuccess('Reply sent to the session thread.');
     } catch (err) {
       setError(resolveErrorMessage(err));
     } finally {
@@ -794,6 +863,7 @@ function SessionsTab({
         {/* Sticky header */}
         <View style={[styles.threadHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <Pressable style={styles.threadBackBtn} onPress={() => {
+            stopPolling();
             setSelectedSession(null);
             setMessages([]);
             setError(null);
@@ -876,7 +946,7 @@ function SessionsTab({
             </View>
           ) : (
             <View style={styles.messagesColumn}>
-              {messages.map((message) => {
+              {messages.filter((m) => m.source !== 'takeover_notice').map((message) => {
                 const isVisitor = message.role === 'user';
                 const isHuman = message.role === 'assistant' && message.human_takeover;
                 const isAI = message.role === 'assistant' && !message.human_takeover;
@@ -895,7 +965,7 @@ function SessionsTab({
                       </View>
                     ) : null}
 
-                    <View style={{ maxWidth: '75%', gap: 4 }}>
+                    <View style={{ maxWidth: '75%', gap: 3 }}>
                       <Text style={[styles.chatSenderLabel, { color: isHuman ? theme.colors.accent : isAI ? theme.colors.primary : theme.colors.muted, textAlign: isVisitor ? 'left' : 'right' }]}>
                         {isVisitor ? 'Visitor' : isHuman ? (message.sent_by_name || 'You') : 'ZaoChat AI'}
                       </Text>
@@ -918,6 +988,11 @@ function SessionsTab({
                           {message.content}
                         </Text>
                       </View>
+                      {message.created_at ? (
+                        <Text style={{ fontSize: 10, color: theme.colors.subtle, textAlign: isVisitor ? 'left' : 'right', paddingHorizontal: 2 }}>
+                          {formatRelativeTime(message.created_at)}
+                        </Text>
+                      ) : null}
                     </View>
 
                     {!isVisitor ? (
@@ -971,6 +1046,7 @@ function SessionsTab({
               style={[styles.handBackBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, opacity: savingTakeover ? 0.6 : 1 }]}
               disabled={savingTakeover}
               onPress={async () => {
+                stopPolling();
                 await handleTakeover();
                 setSelectedSession(null);
                 setMessages([]);
@@ -2250,10 +2326,10 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 32,
-    gap: 18,
+    gap: 14,
   },
   sectionColumn: {
     gap: 12,
