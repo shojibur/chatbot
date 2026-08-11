@@ -575,7 +575,7 @@ function AppShell({
 
   const tabContent = activeTab === 'sessions' ? (
     <SessionsTab
-      sessions={appData.sessions.filter((s) => s.is_human_takeover)}
+      sessions={appData.sessions.filter((s) => s.is_human_takeover || s.is_active)}
       token={token}
       onSessionsChange={(sessions) => onDataChange({ ...appData, sessions })}
       onThreadOpen={() => setSessionThreadOpen(true)}
@@ -583,7 +583,7 @@ function AppShell({
     />
   ) : activeTab === 'history' ? (
     <HistoryTab
-      sessions={appData.sessions.filter((s) => !s.is_human_takeover)}
+      sessions={appData.sessions.filter((s) => !s.is_human_takeover && !s.is_active)}
       token={token}
     />
   ) : activeTab === 'leads' ? (
@@ -1291,16 +1291,21 @@ function LeadsTab({
                     <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
                       {lead.name}
                     </Text>
-                    <View style={[
-                      styles.sessionCardBadge,
-                      {
-                        backgroundColor: lead.status === 'new' ? theme.colors.primary + '22' : theme.colors.surface,
-                        borderColor: lead.status === 'new' ? theme.colors.primary + '44' : theme.colors.border,
-                      },
-                    ]}>
-                      <Text style={[styles.sessionCardBadgeText, { color: lead.status === 'new' ? theme.colors.primary : theme.colors.muted }]}>
-                        {capitalize(lead.status)}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]}>
+                        {formatRelativeTime(lead.created_at)}
                       </Text>
+                      <View style={[
+                        styles.sessionCardBadge,
+                        {
+                          backgroundColor: lead.status === 'new' ? theme.colors.primary + '22' : theme.colors.surface,
+                          borderColor: lead.status === 'new' ? theme.colors.primary + '44' : theme.colors.border,
+                        },
+                      ]}>
+                        <Text style={[styles.sessionCardBadgeText, { color: lead.status === 'new' ? theme.colors.primary : theme.colors.muted }]}>
+                          {capitalize(lead.status)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
                   <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
