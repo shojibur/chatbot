@@ -1064,99 +1064,130 @@ function SessionsTab({
   const liveSessions = sessions.filter((s) => s.is_human_takeover || s.is_active);
   const historySessions = sessions.filter((s) => !s.is_human_takeover && !s.is_active);
 
-  function renderSessionCard(session: MobileSession) {
+  function renderLiveCard(session: MobileSession) {
     const isTakenOver = session.is_human_takeover;
-    const isActive = session.is_active;
     const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
-    const preview = session.first_message || session.page_url || 'No preview';
-
-    // Colour logic: taken-over = primary brand, active-visitor = orange/amber, history = grey
-    const cardBorderColor = isTakenOver
-      ? theme.colors.primary + '60'
-      : isActive
-        ? '#f59e0b60'
-        : theme.colors.border;
-    const avatarBg = isTakenOver
-      ? theme.colors.primary + '22'
-      : isActive
-        ? '#f59e0b22'
-        : theme.colors.surface;
-    const avatarBorder = isTakenOver
-      ? theme.colors.primary + '44'
-      : isActive
-        ? '#f59e0b44'
-        : theme.colors.border;
-    const avatarIconColor = isTakenOver
-      ? theme.colors.primary
-      : isActive
-        ? '#f59e0b'
-        : theme.colors.muted;
-    const badgeBg = isTakenOver
-      ? theme.colors.primary + '22'
-      : isActive
-        ? '#f59e0b22'
-        : theme.colors.surface;
-    const badgeBorder = isTakenOver
-      ? theme.colors.primary + '44'
-      : isActive
-        ? '#f59e0b44'
-        : theme.colors.border;
-    const badgeText = isTakenOver
-      ? theme.colors.primary
-      : isActive
-        ? '#f59e0b'
-        : theme.colors.muted;
-    const badgeLabel = isTakenOver ? "You're live" : isActive ? 'Active now' : `${session.message_count} msgs`;
+    const preview = session.first_message || 'No preview';
+    const domain = session.page_url
+      ? (() => { try { return new URL(session.page_url).hostname; } catch { return session.page_url; } })()
+      : null;
+    const accentColor = isTakenOver ? theme.colors.primary : '#f59e0b';
+    const accentColorFaint = isTakenOver ? theme.colors.primary + '14' : '#f59e0b14';
+    const statusLabel = isTakenOver ? "You're live" : 'Visitor active';
+    const statusIcon = isTakenOver ? 'hand-left' : 'ellipsis-horizontal';
 
     return (
       <Pressable
         key={session.id}
         style={[
-          styles.sessionCard,
-          {
-            backgroundColor: theme.colors.card,
-            borderColor: cardBorderColor,
+          styles.liveCard,
+          { backgroundColor: theme.colors.card, borderColor: accentColor + '30' },
+          isTakenOver && {
+            shadowColor: theme.colors.primary,
+            shadowOpacity: 0.18,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 6,
           },
-          isTakenOver && { shadowColor: theme.colors.primary, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-          isActive && !isTakenOver && { shadowColor: '#f59e0b', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
         ]}
         onPress={() => openSession(session)}
       >
-        <View style={styles.sessionCardLeft}>
-          <View style={[
-            styles.sessionCardAvatar,
-            { backgroundColor: avatarBg, borderColor: avatarBorder },
-          ]}>
-            <Ionicons name="person" size={18} color={avatarIconColor} />
-            {(isTakenOver || isActive) ? <View style={[styles.sessionCardLiveDot, isActive && !isTakenOver && { backgroundColor: '#f59e0b' }]} /> : null}
-          </View>
-        </View>
+        {/* Left accent stripe */}
+        <View style={[styles.liveCardStripe, { backgroundColor: accentColor }]} />
 
-        <View style={styles.sessionCardBody}>
-          <View style={styles.sessionCardTopRow}>
-            <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
-              {visitorName}
-            </Text>
-            <View style={[
-              styles.sessionCardBadge,
-              { backgroundColor: badgeBg, borderColor: badgeBorder },
-            ]}>
-              <Text style={[styles.sessionCardBadgeText, { color: badgeText }]}>
-                {badgeLabel}
+        <View style={styles.liveCardInner}>
+          {/* Top row: status label + time */}
+          <View style={styles.liveCardTopRow}>
+            <View style={[styles.liveCardStatusPill, { backgroundColor: accentColorFaint }]}>
+              <View style={[styles.liveCardPulseDot, { backgroundColor: accentColor }]} />
+              <Ionicons name={statusIcon} size={11} color={accentColor} />
+              <Text style={[styles.liveCardStatusText, { color: accentColor }]}>
+                {statusLabel}
               </Text>
             </View>
+            <Text style={[styles.liveCardTime, { color: theme.colors.subtle }]}>
+              {formatRelativeTime(session.last_activity_at)}
+            </Text>
           </View>
-          <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+
+          {/* Visitor name */}
+          <Text style={[styles.liveCardName, { color: theme.colors.text }]} numberOfLines={1}>
+            {visitorName}
+          </Text>
+
+          {/* Message preview */}
+          <Text style={[styles.liveCardPreview, { color: theme.colors.muted }]} numberOfLines={2}>
             {preview}
           </Text>
-          {session.page_url ? (
-            <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]} numberOfLines={1}>
-              {session.page_url}
-            </Text>
-          ) : null}
+
+          {/* Bottom row: msg count + domain */}
+          <View style={styles.liveCardBottomRow}>
+            <View style={[styles.liveCardMeta, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Ionicons name="chatbubble-outline" size={10} color={theme.colors.subtle} />
+              <Text style={[styles.liveCardMetaText, { color: theme.colors.muted }]}>
+                {session.message_count} msgs
+              </Text>
+            </View>
+            {domain ? (
+              <View style={[styles.liveCardMeta, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Ionicons name="globe-outline" size={10} color={theme.colors.subtle} />
+                <Text style={[styles.liveCardMetaText, { color: theme.colors.muted }]} numberOfLines={1}>
+                  {domain}
+                </Text>
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            <Ionicons name="chevron-forward" size={14} color={accentColor + '80'} />
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
+
+  function renderHistoryCard(session: MobileSession) {
+    const visitorName = session.visitor_identifier || session.visitor_ip || 'Anonymous visitor';
+    const preview = session.first_message || 'No preview';
+    const domain = session.page_url
+      ? (() => { try { return new URL(session.page_url).hostname; } catch { return session.page_url; } })()
+      : null;
+
+    return (
+      <Pressable
+        key={session.id}
+        style={[styles.historyRowCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+        onPress={() => openSession(session)}
+      >
+        <View style={[styles.historyRowAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <Ionicons name="person" size={16} color={theme.colors.muted} />
         </View>
 
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.subtle} />
+        <View style={styles.historyRowBody}>
+          <View style={styles.historyRowTopRow}>
+            <Text style={[styles.historyRowName, { color: theme.colors.text }]} numberOfLines={1}>
+              {visitorName}
+            </Text>
+            <Text style={[styles.historyRowTime, { color: theme.colors.subtle }]}>
+              {formatRelativeTime(session.last_activity_at)}
+            </Text>
+          </View>
+          <Text style={[styles.historyRowPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+            {preview}
+          </Text>
+          <View style={styles.historyRowChips}>
+            <View style={[styles.historyRowChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Ionicons name="chatbubble-outline" size={9} color={theme.colors.subtle} />
+              <Text style={[styles.historyRowChipText, { color: theme.colors.muted }]}>{session.message_count} msgs</Text>
+            </View>
+            {domain ? (
+              <View style={[styles.historyRowChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Ionicons name="globe-outline" size={9} color={theme.colors.subtle} />
+                <Text style={[styles.historyRowChipText, { color: theme.colors.muted }]} numberOfLines={1}>{domain}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <Ionicons name="chevron-forward" size={14} color={theme.colors.subtle} />
       </Pressable>
     );
   }
@@ -1177,25 +1208,29 @@ function SessionsTab({
           {/* Live section */}
           {liveSessions.length > 0 ? (
             <>
-              <View style={styles.sessionsSectionHeader}>
-                <View style={[styles.liveChip, { backgroundColor: '#4ade8022', borderColor: '#4ade8055' }]}>
-                  <View style={styles.liveDot} />
-                  <Text style={[styles.liveChipText, { color: '#4ade80' }]}>
-                    {liveSessions.length} Active
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+                <View style={[styles.dividerChip, { backgroundColor: '#4ade8018', borderColor: '#4ade8040' }]}>
+                  <View style={styles.dividerDot} />
+                  <Text style={[styles.dividerLabel, { color: '#4ade80' }]}>
+                    {liveSessions.length} active
                   </Text>
                 </View>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
               </View>
-              {liveSessions.map(renderSessionCard)}
+              {liveSessions.map(renderLiveCard)}
             </>
           ) : null}
 
           {/* History section */}
           {historySessions.length > 0 ? (
             <>
-              <View style={styles.sessionsSectionHeader}>
-                <Text style={[styles.sessionsSectionLabel, { color: theme.colors.muted }]}>History</Text>
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+                <Text style={[styles.dividerLabelPlain, { color: theme.colors.subtle }]}>recent</Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
               </View>
-              {historySessions.map(renderSessionCard)}
+              {historySessions.map(renderHistoryCard)}
             </>
           ) : null}
         </>
@@ -1343,7 +1378,7 @@ function LeadsTab({
             <View key={lead.id}>
               <Pressable
                 style={[
-                  styles.sessionCard,
+                  styles.historyRowCard,
                   {
                     backgroundColor: isSelected ? theme.colors.surface : theme.colors.card,
                     borderColor: isSelected ? theme.colors.primary + '60' : theme.colors.border,
@@ -1351,37 +1386,35 @@ function LeadsTab({
                 ]}
                 onPress={() => handleLeadPress(lead)}
               >
-                <View style={styles.sessionCardLeft}>
-                  <View style={[
-                    styles.sessionCardAvatar,
-                    { backgroundColor: isSelected ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isSelected ? theme.colors.primary + '44' : theme.colors.border },
-                  ]}>
-                    <Ionicons name="person" size={18} color={isSelected ? theme.colors.primary : theme.colors.muted} />
-                  </View>
+                <View style={[
+                  styles.historyRowAvatar,
+                  { backgroundColor: isSelected ? theme.colors.primary + '22' : theme.colors.surface, borderColor: isSelected ? theme.colors.primary + '44' : theme.colors.border },
+                ]}>
+                  <Ionicons name="person" size={16} color={isSelected ? theme.colors.primary : theme.colors.muted} />
                 </View>
-                <View style={styles.sessionCardBody}>
-                  <View style={styles.sessionCardTopRow}>
-                    <Text style={[styles.sessionCardName, { color: theme.colors.text }]} numberOfLines={1}>
+                <View style={styles.historyRowBody}>
+                  <View style={styles.historyRowTopRow}>
+                    <Text style={[styles.historyRowName, { color: theme.colors.text }]} numberOfLines={1}>
                       {lead.name}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.sessionCardUrl, { color: theme.colors.subtle }]}>
+                      <Text style={[styles.historyRowTime, { color: theme.colors.subtle }]}>
                         {formatRelativeTime(lead.created_at)}
                       </Text>
                       <View style={[
-                        styles.sessionCardBadge,
+                        styles.historyRowChip,
                         {
                           backgroundColor: lead.status === 'new' ? theme.colors.primary + '22' : theme.colors.surface,
                           borderColor: lead.status === 'new' ? theme.colors.primary + '44' : theme.colors.border,
                         },
                       ]}>
-                        <Text style={[styles.sessionCardBadgeText, { color: lead.status === 'new' ? theme.colors.primary : theme.colors.muted }]}>
+                        <Text style={[styles.historyRowChipText, { color: lead.status === 'new' ? theme.colors.primary : theme.colors.muted }]}>
                           {capitalize(lead.status)}
                         </Text>
                       </View>
                     </View>
                   </View>
-                  <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={1}>
+                  <Text style={[styles.historyRowPreview, { color: theme.colors.muted }]} numberOfLines={1}>
                     {lead.user_request || lead.contact}
                   </Text>
                 </View>
@@ -1773,47 +1806,42 @@ function HistoryTab({
           return (
             <Pressable
               key={session.id}
-              style={[styles.historyCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+              style={[styles.historyRowCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
               onPress={() => openSession(session)}
             >
-              {/* Left avatar */}
-              <View style={[styles.sessionCardAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, flexShrink: 0 }]}>
-                <Ionicons name="person" size={18} color={theme.colors.muted} />
+              <View style={[styles.historyRowAvatar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Ionicons name="person" size={16} color={theme.colors.muted} />
               </View>
 
-              {/* Body */}
-              <View style={{ flex: 1, gap: 5, minWidth: 0 }}>
-                {/* Row 1: name + time */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <Text style={[styles.sessionCardName, { color: theme.colors.text, flex: 1 }]} numberOfLines={1}>
+              <View style={styles.historyRowBody}>
+                <View style={styles.historyRowTopRow}>
+                  <Text style={[styles.historyRowName, { color: theme.colors.text }]} numberOfLines={1}>
                     {visitorName}
                   </Text>
-                  <Text style={{ fontSize: 11, color: theme.colors.subtle, flexShrink: 0 }}>
+                  <Text style={[styles.historyRowTime, { color: theme.colors.subtle }]}>
                     {formatRelativeTime(session.last_activity_at)}
                   </Text>
                 </View>
 
-                {/* Row 2: first message preview */}
-                <Text style={[styles.sessionCardPreview, { color: theme.colors.muted }]} numberOfLines={2}>
+                <Text style={[styles.historyRowPreview, { color: theme.colors.muted }]} numberOfLines={1}>
                   {preview}
                 </Text>
 
-                {/* Row 3: chips */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <View style={[styles.historyChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                    <Ionicons name="chatbubble-outline" size={10} color={theme.colors.muted} />
-                    <Text style={[styles.historyChipText, { color: theme.colors.muted }]}>{session.message_count} msgs</Text>
+                <View style={styles.historyRowChips}>
+                  <View style={[styles.historyRowChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                    <Ionicons name="chatbubble-outline" size={9} color={theme.colors.subtle} />
+                    <Text style={[styles.historyRowChipText, { color: theme.colors.muted }]}>{session.message_count} msgs</Text>
                   </View>
                   {domain ? (
-                    <View style={[styles.historyChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                      <Ionicons name="globe-outline" size={10} color={theme.colors.muted} />
-                      <Text style={[styles.historyChipText, { color: theme.colors.muted }]} numberOfLines={1}>{domain}</Text>
+                    <View style={[styles.historyRowChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                      <Ionicons name="globe-outline" size={9} color={theme.colors.subtle} />
+                      <Text style={[styles.historyRowChipText, { color: theme.colors.muted }]} numberOfLines={1}>{domain}</Text>
                     </View>
                   ) : null}
                 </View>
               </View>
 
-              <Ionicons name="chevron-forward" size={15} color={theme.colors.subtle} />
+              <Ionicons name="chevron-forward" size={14} color={theme.colors.subtle} />
             </Pressable>
           );
         })
@@ -2700,66 +2728,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  liveChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: '#4ade80',
-  },
-  liveChipText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  sessionsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingTop: 4,
-  },
-  sessionsSectionLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
   sessionsEmpty: {
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
     borderRadius: 24,
     padding: 48,
-  },
-  // History tab
-  historyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-  },
-  historyChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  historyChipText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
   },
   historyUrlStrip: {
     flexDirection: 'row',
@@ -2797,71 +2771,179 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: 'center',
   },
-  sessionCard: {
+  // Live session cards
+  liveCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     borderWidth: 1,
     borderRadius: 20,
-    padding: 16,
+    overflow: 'hidden',
   },
-  sessionCardLeft: {
+  liveCardStripe: {
+    width: 4,
     flexShrink: 0,
   },
-  sessionCardAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionCardLiveDot: {
-    position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 11,
-    height: 11,
-    borderRadius: 999,
-    backgroundColor: '#4ade80',
-    borderWidth: 2,
-    borderColor: '#07070f',
-  },
-  sessionCardBody: {
+  liveCardInner: {
     flex: 1,
-    gap: 4,
-    minWidth: 0,
+    padding: 14,
+    gap: 6,
   },
-  sessionCardTopRow: {
+  liveCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  sessionCardName: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    flex: 1,
+  liveCardStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
-  sessionCardBadge: {
+  liveCardPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+  },
+  liveCardStatusText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  liveCardTime: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+  },
+  liveCardName: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  liveCardPreview: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  liveCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  liveCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
+  },
+  liveCardMetaText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  // History row cards (compact)
+  historyRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  historyRowAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
-  sessionCardBadgeText: {
+  historyRowBody: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  historyRowTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  historyRowName: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-  },
-  sessionCardPreview: {
-    fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    lineHeight: 18,
+    flex: 1,
   },
-  sessionCardUrl: {
+  historyRowTime: {
     fontFamily: 'Inter_400Regular',
     fontSize: 11,
+    flexShrink: 0,
+  },
+  historyRowPreview: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  historyRowChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  historyRowChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  historyRowChipText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  // Divider rows between sections
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  dividerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#4ade80',
+  },
+  dividerLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.3,
+  },
+  dividerLabelPlain: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   // Thread / chat view
   threadScreen: {
