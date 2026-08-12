@@ -15,10 +15,7 @@ import { LeadsTab } from '../tabs/LeadsTab';
 import { SettingsTab } from '../tabs/SettingsTab';
 import { ErrorBanner } from './Banners';
 import { getTheme } from '../theme';
-import type {
-  MobileAppBootstrap,
-  MobileUserContext,
-} from '../lib/mobileApi';
+import type { MobileAppBootstrap, MobileUserContext } from '../lib/mobileApi';
 
 const logo = require('../../assets/splash-icon.png');
 
@@ -48,6 +45,7 @@ export function AppShell({
   userContext,
 }: AppShellProps) {
   const theme = getTheme(useColorScheme());
+  const isDark = theme.name === 'dark';
 
   const tabContent = activeTab === 'sessions' ? (
     <SessionsTab
@@ -79,14 +77,23 @@ export function AppShell({
 
   return (
     <View style={[styles.shell, { backgroundColor: theme.colors.bg }]}>
-      {/* Compact header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: isDark ? theme.colors.card : theme.colors.bg, borderBottomColor: theme.colors.border }]}>
         <View style={styles.headerLeft}>
-          <Image source={logo} style={styles.headerLogo} resizeMode="contain" />
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
-            {userContext.client.name}
-          </Text>
+          <View style={[styles.logoWrap, { backgroundColor: theme.colors.primary + '18', borderColor: theme.colors.primary + '30' }]}>
+            <Image source={logo} style={styles.headerLogo} resizeMode="contain" />
+          </View>
+          <View style={styles.headerCopy}>
+            <Text style={[styles.headerTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {userContext.client.name}
+            </Text>
+            <Text style={[styles.headerSub, { color: theme.colors.muted }]} numberOfLines={1}>
+              {userContext.user.email}
+            </Text>
+          </View>
         </View>
+
         <Pressable
           style={[styles.refreshBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
           onPress={onRefresh}
@@ -94,7 +101,7 @@ export function AppShell({
         >
           {appLoading
             ? <ActivityIndicator size="small" color={theme.colors.primary} />
-            : <Ionicons name="refresh-outline" size={18} color={theme.colors.muted} />
+            : <Ionicons name="refresh-outline" size={17} color={theme.colors.muted} />
           }
         </Pressable>
       </View>
@@ -104,26 +111,28 @@ export function AppShell({
       <View style={{ flex: 1 }}>{tabContent}</View>
 
       {/* Tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: theme.colors.bg, borderTopColor: theme.colors.border }]}>
+      <View style={[styles.tabBar, { backgroundColor: isDark ? theme.colors.card : theme.colors.bg, borderTopColor: theme.colors.border }]}>
         {TAB_ITEMS.map((tab) => {
           const isActive = activeTab === tab.key;
+
           return (
             <Pressable key={tab.key} style={styles.tabBtn} onPress={() => onChangeTab(tab.key)}>
-              <Ionicons
-                name={isActive ? tab.iconActive : tab.icon}
-                size={22}
-                color={isActive ? theme.colors.primary : theme.colors.subtle}
-              />
+              <View style={[styles.tabIconWrap, isActive && { backgroundColor: theme.colors.primary + '1a' }]}>
+                <Ionicons
+                  name={isActive ? tab.iconActive : tab.icon}
+                  size={21}
+                  color={isActive ? theme.colors.primary : theme.colors.subtle}
+                />
+              </View>
               <Text
                 style={[
                   styles.tabLabel,
-                  isActive ? styles.tabLabelActive : null,
                   { color: isActive ? theme.colors.primary : theme.colors.subtle },
+                  isActive ? styles.tabLabelActive : null,
                 ]}
               >
                 {tab.label}
               </Text>
-              {isActive ? <View style={[styles.tabDot, { backgroundColor: theme.colors.primary }]} /> : null}
             </Pressable>
           );
         })}
@@ -141,32 +150,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
   headerLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingRight: 10,
     minWidth: 0,
   },
-  headerLogo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+  logoWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
+  },
+  headerLogo: {
+    width: 22,
+    height: 22,
+  },
+  headerCopy: {
+    flex: 1,
+    gap: 1,
+    minWidth: 0,
   },
   headerTitle: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    letterSpacing: -0.3,
-    flex: 1,
+    fontSize: 14,
+    letterSpacing: -0.2,
+  },
+  headerSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
   },
   refreshBtn: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
@@ -178,16 +202,23 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     paddingTop: 8,
-    paddingBottom: 20,
-    paddingHorizontal: 8,
+    paddingBottom: 22,
+    paddingHorizontal: 4,
     borderTopWidth: 1,
   },
   tabBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 4,
+    gap: 4,
+    paddingVertical: 2,
+  },
+  tabIconWrap: {
+    width: 40,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     fontFamily: 'Inter_500Medium',
@@ -195,12 +226,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   tabLabelActive: {
-    fontFamily: 'Inter_600SemiBold',
-  },
-  tabDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 999,
-    marginTop: 1,
+    fontFamily: 'Inter_700Bold',
   },
 });

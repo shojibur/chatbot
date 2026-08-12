@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import {
   useColorScheme,
   ActivityIndicator,
@@ -42,6 +43,7 @@ export function LoginScreen({
   onBack,
 }: LoginScreenProps) {
   const theme = getTheme(useColorScheme());
+  const isDark = theme.name === 'dark';
   const canSubmit = Boolean(email.trim() && password.trim() && !isSubmitting);
 
   return (
@@ -49,13 +51,29 @@ export function LoginScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.screen, { backgroundColor: theme.colors.bg }]}
     >
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Image source={logo} style={styles.logo} resizeMode="contain" />
-        <Text style={[styles.title,    { color: theme.colors.text }]}>Sign in to your client portal</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.muted }]}>
-          Access sessions, leads, knowledge, and settings from one place.
-        </Text>
+      {/* Decorative blobs */}
+      <View style={[styles.blob1, { backgroundColor: theme.colors.primary, opacity: isDark ? 0.18 : 0.10 }]} />
+      <View style={[styles.blob2, { backgroundColor: theme.colors.accent, opacity: isDark ? 0.14 : 0.08 }]} />
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Back link */}
+        <Pressable style={styles.backBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={16} color={theme.colors.muted} />
+          <Text style={[styles.backText, { color: theme.colors.muted }]}>Back</Text>
+        </Pressable>
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={[styles.logoBadge, { backgroundColor: theme.colors.card, borderColor: isDark ? theme.colors.primary + '44' : theme.colors.border }]}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+          </View>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Welcome back</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.muted }]}>
+            Sign in to manage your chatbot
+          </Text>
+        </View>
+
+        {/* Form card */}
         <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <Field
             label="Email"
@@ -75,29 +93,32 @@ export function LoginScreen({
 
           {loginError ? <ErrorBanner text={loginError} /> : null}
 
+          {/* Remember me */}
           <Pressable style={styles.rememberRow} onPress={onRememberToggle}>
             <View
               style={[
                 styles.checkbox,
                 {
-                  borderColor: theme.colors.border,
-                  backgroundColor: rememberMe ? theme.colors.primary : theme.colors.surface,
+                  borderColor: rememberMe ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: rememberMe ? theme.colors.primary : 'transparent',
                 },
               ]}
             >
-              {rememberMe ? <View style={[styles.checkboxDot, { backgroundColor: theme.colors.primaryText }]} /> : null}
+              {rememberMe ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
             </View>
             <Text style={[styles.rememberText, { color: theme.colors.muted }]}>
-              Keep me signed in on this device
+              Keep me signed in
             </Text>
           </Pressable>
 
+          {/* Sign in button */}
           <Pressable
             style={[
               styles.primaryBtn,
               {
                 backgroundColor: canSubmit ? theme.colors.primary : theme.colors.subtle,
-                opacity: canSubmit ? 1 : 0.7,
+                opacity: canSubmit ? 1 : 0.55,
+                shadowColor: canSubmit ? theme.colors.primary : 'transparent',
               },
             ]}
             disabled={!canSubmit}
@@ -105,16 +126,12 @@ export function LoginScreen({
           >
             {isSubmitting ? (
               <View style={styles.btnRow}>
-                <ActivityIndicator color={theme.colors.primaryText} />
-                <Text style={[styles.primaryBtnText, { color: theme.colors.primaryText }]}>Signing In...</Text>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.primaryBtnText}>Signing in…</Text>
               </View>
             ) : (
-              <Text style={[styles.primaryBtnText, { color: theme.colors.primaryText }]}>Sign In</Text>
+              <Text style={styles.primaryBtnText}>Sign In</Text>
             )}
-          </Pressable>
-
-          <Pressable style={styles.backBtn} onPress={onBack}>
-            <Text style={[styles.backBtnText, { color: theme.colors.accent }]}>Back to onboarding</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -124,36 +141,89 @@ export function LoginScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+
+  // Background blobs
+  blob1: {
+    position: 'absolute',
+    top: -80,
+    right: -60,
+    width: 280,
+    height: 280,
+    borderRadius: 999,
+  },
+  blob2: {
+    position: 'absolute',
+    bottom: 60,
+    left: -80,
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+  },
+
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 36,
-    gap: 20,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 48,
+    gap: 24,
+  },
+
+  // Back
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  backText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+  },
+
+  // Header
+  header: {
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 12,
+  },
+  logoBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366f1',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   logo: {
-    width: 86,
-    height: 86,
-    marginTop: 18,
-    marginBottom: 4,
-    alignSelf: 'center',
+    width: 42,
+    height: 42,
   },
   title: {
     fontFamily: 'Inter_800ExtraBold',
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -1,
+    fontSize: 28,
+    letterSpacing: -0.8,
+    marginTop: 4,
   },
   subtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 22,
   },
+
+  // Card
   card: {
     borderWidth: 1,
     borderRadius: 24,
-    padding: 20,
-    gap: 16,
+    padding: 22,
+    gap: 18,
   },
+
+  // Remember me
   rememberRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -162,28 +232,28 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 22,
     height: 22,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-  },
   rememberText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    flex: 1,
+    fontSize: 14,
   },
+
+  // Primary button
   primaryBtn: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingVertical: 17,
     borderRadius: 100,
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+    marginTop: 4,
   },
   btnRow: {
     flexDirection: 'row',
@@ -192,14 +262,8 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-  },
-  backBtn: {
-    alignItems: 'center',
-    paddingTop: 2,
-  },
-  backBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontSize: 16,
+    color: '#ffffff',
+    letterSpacing: 0.1,
   },
 });
