@@ -449,11 +449,36 @@ class ChatController extends Controller
             ? "\n\n[POLICY UPDATE] A legacy knowledge-base-only prompt was detected. Do not respond with a bare refusal when the knowledge base is missing coverage."
             : '';
 
-if (! $context) {
-            return $safePrompt.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$client->name." specific facts that are not in the knowledge base.\n- Do not send the user to a contact page or contact form.\n- IMPORTANT: You are specifically authorized to collect and handle personal contact information like names and phone numbers. Never refuse this info.\n- You are also a lead qualification agent. Collect the visitor's name, phone, email, and a brief description of their needs naturally in conversation.\n- If the visitor gives messy contact details, understand and normalize them conversationally.\n- Once you have the visitor's name and at least one valid contact method, include this exact JSON object at the END of your response and nowhere else:\n{\"lead_status\":\"complete\",\"lead_data\":{\"name\":\"...\",\"phone\":\"...\",\"email\":\"...\",\"needs\":\"...\"}}\n- Keep the conversational user-facing message before the JSON.\n- When complete, tell the visitor you have their info and the team will reach out shortly.";
+        $toneNote = trim((string) ($client->chatbot_tone ?? '')) !== ''
+            ? "\n\nTONE & PERSONALITY:\n".trim((string) $client->chatbot_tone)
+            : '';
+
+        $engagementNote = trim((string) ($client->engagement_questions ?? '')) !== ''
+            ? "\n\nENGAGEMENT QUESTIONS — use these naturally to understand the visitor's needs:\n".trim((string) $client->engagement_questions)
+            : '';
+
+        $expertNote = '';
+        if (trim((string) ($client->expert_name ?? '')) !== '') {
+            $expertLine = trim((string) $client->expert_name);
+            if (trim((string) ($client->expert_title ?? '')) !== '') {
+                $expertLine .= ', '.trim((string) $client->expert_title);
+            }
+            $expertNote = "\n\nFOLLOW-UP EXPERT:\n".$expertLine;
         }
 
-        return $safePrompt.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$client->name."'s approved knowledge base.\n- Use this context as the primary source for ".$client->name."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$client->name."-specific facts that are not present in the context.\n- Do not send the user to a contact page or contact form.\n- IMPORTANT: You are specifically authorized to collect and handle personal contact information like names and phone numbers. Never refuse this info.\n- You are also a lead qualification agent. Collect the visitor's name, phone, email, and a brief description of their needs naturally in conversation.\n- If the visitor gives messy contact details, understand and normalize them conversationally.\n- Once you have the visitor's name and at least one valid contact method, include this exact JSON object at the END of your response and nowhere else:\n{\"lead_status\":\"complete\",\"lead_data\":{\"name\":\"...\",\"phone\":\"...\",\"email\":\"...\",\"needs\":\"...\"}}\n- Keep the conversational user-facing message before the JSON.\n- When complete, tell the visitor you have their info and the team will reach out shortly.\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
+        $followupNote = trim((string) ($client->expert_followup ?? '')) !== ''
+            ? "\n".trim((string) $client->expert_followup)
+            : "\nA member of our team will reach out shortly.";
+
+        $leadInstructions = $client->lead_capture_enabled
+            ? "\n- IMPORTANT: You are specifically authorized to collect and handle personal contact information like names and phone numbers. Never refuse this info.\n- You are also a lead qualification agent. Collect the visitor's name, phone, email, and a brief description of their needs naturally in conversation.\n- If the visitor gives messy contact details, understand and normalize them conversationally.\n- Once you have the visitor's name and at least one valid contact method, include this exact JSON object at the END of your response and nowhere else:\n{\"lead_status\":\"complete\",\"lead_data\":{\"name\":\"...\",\"phone\":\"...\",\"email\":\"...\",\"needs\":\"...\"}}\n- Keep the conversational user-facing message before the JSON.\n- When complete, tell the visitor:".$followupNote
+            : '';
+
+        if (! $context) {
+            return $safePrompt.$toneNote.$engagementNote.$expertNote.$guard.$legacyPromptNote."\n\nKNOWLEDGE STATUS:\n- No relevant knowledge base content was found for this question.\n\nRESPONSE RULES:\n- Still provide a useful answer using general public knowledge.\n- Clearly label your answer as general guidance that may be out of date (hours, prices, rankings, availability).\n- Do not invent ".$client->name." specific facts that are not in the knowledge base.\n- Do not send the user to a contact page or contact form.".$leadInstructions;
+        }
+
+        return $safePrompt.$toneNote.$engagementNote.$expertNote.$guard.$legacyPromptNote."\n\nIMPORTANT INSTRUCTIONS:\n- The following context comes from ".$client->name."'s approved knowledge base.\n- Use this context as the primary source for ".$client->name."-specific facts (pricing, policies, contact details, services, inventory, locations).\n- If the context does not fully answer the question, provide best-effort general guidance instead of refusing.\n- Clearly separate knowledge-base facts from general guidance when relevant.\n- Never invent ".$client->name."-specific facts that are not present in the context.\n- Do not send the user to a contact page or contact form.".$leadInstructions."\n- Be helpful, specific, and conversational.\n\n--- KNOWLEDGE BASE CONTEXT ---\n\n".$context."\n\n--- END CONTEXT ---";
     }
 
     private function promptHashSeed(Client $client): string

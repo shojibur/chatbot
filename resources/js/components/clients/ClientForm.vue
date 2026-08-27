@@ -534,14 +534,92 @@ onUnmounted(() => {
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
-                            <Label for="system_prompt">System prompt</Label>
+                            <Label for="system_prompt">Instructions</Label>
                             <textarea
                                 id="system_prompt"
                                 v-model="form.system_prompt"
                                 :class="textAreaClass"
-                                placeholder="Tell the assistant how to answer, what to avoid, and how to use the client knowledge base."
+                                placeholder="Write the exact instructions for this chatbot. Example: You are a friendly assistant for Acme Plumbing. Only answer questions about plumbing services, pricing, and bookings. Do not discuss competitors."
                             />
+                            <p class="text-xs text-muted-foreground">
+                                These are the exact instructions the AI will follow. Write them clearly — the AI will stick to whatever you put here.
+                            </p>
                             <InputError :message="form.errors.system_prompt" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="chatbot_tone">Tone &amp; personality</Label>
+                            <Input
+                                id="chatbot_tone"
+                                v-model="form.chatbot_tone"
+                                placeholder="Helpful, friendly advisor. Knowledgeable but not salesy. Conversational tone."
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                How the bot should sound — e.g. "Professional and concise" or "Warm and conversational".
+                            </p>
+                            <InputError :message="form.errors.chatbot_tone" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="engagement_questions">Engagement / discovery questions</Label>
+                            <textarea
+                                id="engagement_questions"
+                                v-model="form.engagement_questions"
+                                :class="textAreaClass"
+                                placeholder="What's your biggest challenge right now?&#10;Are you looking to [achieve X]?&#10;What's most important to you when it comes to [topic]?"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                One question per line. The bot uses these to understand what the visitor needs.
+                            </p>
+                            <InputError :message="form.errors.engagement_questions" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="expert_name">Expert name</Label>
+                            <Input
+                                id="expert_name"
+                                v-model="form.expert_name"
+                                placeholder="John Smith"
+                            />
+                            <InputError :message="form.errors.expert_name" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="expert_title">Expert title</Label>
+                            <Input
+                                id="expert_title"
+                                v-model="form.expert_title"
+                                placeholder="Senior Consultant"
+                            />
+                            <InputError :message="form.errors.expert_title" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="expert_followup">Follow-up message</Label>
+                            <Input
+                                id="expert_followup"
+                                v-model="form.expert_followup"
+                                placeholder="John will reach out within 24 hours with personalized recommendations."
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Shown to the visitor after their contact info is captured.
+                            </p>
+                            <InputError :message="form.errors.expert_followup" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label class="text-sm">Lead capture</Label>
+                            <label
+                                class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
+                            >
+                                <input
+                                    v-model="form.lead_capture_enabled"
+                                    type="checkbox"
+                                    class="size-4 rounded border-input"
+                                />
+                                Collect visitor name, phone, and email during the conversation.
+                            </label>
+                            <InputError :message="form.errors.lead_capture_enabled" />
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">
