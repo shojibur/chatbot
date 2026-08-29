@@ -29,8 +29,8 @@ import widgetStyles from './widget-styles.css?inline';
         return;
     }
 
-    const apiBase =
-        script.getAttribute('data-api-base') || new URL(script.src).origin;
+    const apiBase = script.getAttribute('data-api-base') ||
+        (script.src ? new URL(script.src).origin : window.location.origin);
 
     // Prevent double-mount if script runs twice
     if (document.getElementById('davey-chat-widget')) return;

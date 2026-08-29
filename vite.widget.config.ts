@@ -21,6 +21,7 @@ export default defineConfig({
         },
         cssCodeSplit: false,
         minify: 'esbuild',
+        cssMinify: false,
     },
     define: {
         'process.env.NODE_ENV': JSON.stringify('production'),

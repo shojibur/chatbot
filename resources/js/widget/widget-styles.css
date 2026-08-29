@@ -12,10 +12,12 @@
 }
 
 .davey-widget.davey-expanded {
-    top: 32px;
-    right: 32px;
-    bottom: 32px;
-    left: 32px;
+    top: 32px !important;
+    right: 32px !important;
+    bottom: 32px !important;
+    left: 32px !important;
+    width: auto;
+    height: auto;
 }
 
 .davey-widget *,
@@ -531,8 +533,8 @@
 }
 
 @media (max-width: 640px) {
-    /* Panel goes full-width on mobile */
-    .davey-panel {
+    /* Panel full-width only when the widget is open (panel visible) */
+    .davey-widget:not(.davey-expanded) .davey-panel {
         width: calc(100vw - 24px);
         max-width: 100%;
         max-height: 70vh;
@@ -546,10 +548,10 @@
 
     /* Expanded = true full screen on mobile */
     .davey-widget.davey-expanded {
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
     }
 
     .davey-widget.davey-expanded .davey-panel {
