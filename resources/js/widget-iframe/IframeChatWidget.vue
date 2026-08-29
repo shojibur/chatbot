@@ -547,7 +547,7 @@ function scrollToBottom() {
 
 .davey-iframe-header-avatar-fallback {
     color: #ffffff;
-    font-size: 12px;
+    font-size: 0.7em;
     font-weight: 700;
     letter-spacing: 0.04em;
 }
@@ -560,12 +560,12 @@ function scrollToBottom() {
 }
 
 .davey-iframe-header-title {
-    font-size: 14px;
+    font-size: 1em;
     font-weight: 700;
 }
 
 .davey-iframe-header-status {
-    font-size: 12px;
+    font-size: 0.75em;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -603,7 +603,7 @@ function scrollToBottom() {
     max-width: 85%;
     padding: 10px 12px;
     border-radius: 12px;
-    font-size: 14px;
+    font-size: inherit;
     line-height: 1.45;
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -629,7 +629,8 @@ function scrollToBottom() {
     border: 1px solid #d1d5db;
     border-radius: 10px;
     padding: 10px 12px;
-    font-size: 14px;
+    font-size: inherit;
+    font-family: inherit;
     outline: none;
 }
 
@@ -658,7 +659,7 @@ function scrollToBottom() {
 .davey-iframe-branding {
     padding: 6px 10px 8px;
     text-align: center;
-    font-size: 11px;
+    font-size: 0.65em;
     color: #6b7280;
     border-top: 1px solid #f1f5f9;
     background: #ffffff;
