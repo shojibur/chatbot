@@ -42,10 +42,10 @@ import widgetStyles from './widget-styles.css?inline';
 
     const shadow = host.attachShadow({ mode: 'open' });
 
-    // Inject Google Font link — @import inside textContent is blocked by browsers in Shadow DOM
+    // Inject self-hosted Google Sans — resolves relative to the widget script's origin
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap';
+    fontLink.href = new URL('/fonts/google-sans.css', apiBase).href;
     shadow.appendChild(fontLink);
 
     // Inject styles into Shadow DOM (not <head>)
