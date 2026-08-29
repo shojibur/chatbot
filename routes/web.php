@@ -64,6 +64,7 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
 
     Route::get('backups', [BackupController::class, 'index'])->name('backups.index');
     Route::post('backups/run', [BackupController::class, 'run'])->name('backups.run');
+    Route::get('backups/{filename}/download', [BackupController::class, 'download'])->name('backups.download');
     Route::delete('backups/{filename}', [BackupController::class, 'destroy'])->name('backups.destroy');
 });
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, router, useForm } from '@inertiajs/vue3';
-import { DatabaseBackup, RefreshCw, Trash2 } from 'lucide-vue-next';
+import { Head, router } from '@inertiajs/vue3';
+import { DatabaseBackup, Download, RefreshCw, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -99,15 +99,25 @@ function deleteBackup(filename: string) {
                                 <td class="py-3 pr-4 text-muted-foreground">{{ backup.created_at }}</td>
                                 <td class="py-3 pr-4 text-muted-foreground">{{ backup.size }}</td>
                                 <td class="py-3 text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        :disabled="deletingFile === backup.filename"
-                                        class="text-destructive hover:text-destructive"
-                                        @click="deleteBackup(backup.filename)"
-                                    >
-                                        <Trash2 class="size-4" />
-                                    </Button>
+                                    <div class="flex items-center justify-end gap-1">
+                                        <a
+                                            :href="`/backups/${encodeURIComponent(backup.filename)}/download`"
+                                            download
+                                        >
+                                            <Button variant="ghost" size="sm">
+                                                <Download class="size-4" />
+                                            </Button>
+                                        </a>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            :disabled="deletingFile === backup.filename"
+                                            class="text-destructive hover:text-destructive"
+                                            @click="deleteBackup(backup.filename)"
+                                        >
+                                            <Trash2 class="size-4" />
+                                        </Button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>

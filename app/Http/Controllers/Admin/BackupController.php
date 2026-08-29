@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BackupController extends Controller
 {
@@ -25,6 +26,22 @@ class BackupController extends Controller
         Artisan::call('backup:run --only-db --disable-notifications');
 
         return back()->with('status', 'backup-started');
+    }
+
+    public function download(string $filename): StreamedResponse|RedirectResponse
+    {
+        $path = config('app.name').'/'.$filename;
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($path)) {
+            return back()->with('status', 'backup-not-found');
+        }
+
+        return response()->streamDownload(function () use ($disk, $path) {
+            echo $disk->get($path);
+        }, $filename, [
+            'Content-Type' => 'application/zip',
+        ]);
     }
 
     public function destroy(string $filename): RedirectResponse
