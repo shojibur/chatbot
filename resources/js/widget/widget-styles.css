@@ -1,12 +1,13 @@
 /* Davey Chat Widget — all styles scoped via Shadow DOM */
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
 
 .davey-widget {
     position: fixed;
     bottom: 20px;
     z-index: 2147483647;
     font-family:
-        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
+        'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 17px;
     line-height: 1.5;
     box-sizing: border-box;
 }
