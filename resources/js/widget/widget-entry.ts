@@ -3,9 +3,13 @@ import ChatWidget from './ChatWidget.vue';
 import widgetStyles from './widget-styles.css?inline';
 
 (function () {
-    // Support both sync and async loading by finding our script tag
-    const script =
-        (document.currentScript as HTMLScriptElement | null) ??
+    // Must capture currentScript here at IIFE level — it's null inside any callback
+    const currentScript = document.currentScript as HTMLScriptElement | null;
+
+    function init() {
+    // Support both sync and async/deferred loading
+    const script: HTMLScriptElement | null =
+        currentScript ??
         (document.querySelector(
             'script[data-client-code]',
         ) as HTMLScriptElement | null);
@@ -27,6 +31,9 @@ import widgetStyles from './widget-styles.css?inline';
 
     const apiBase =
         script.getAttribute('data-api-base') || new URL(script.src).origin;
+
+    // Prevent double-mount if script runs twice
+    if (document.getElementById('davey-chat-widget')) return;
 
     // Create Shadow DOM host for full style isolation
     const host = document.createElement('div');
@@ -68,4 +75,12 @@ import widgetStyles from './widget-styles.css?inline';
         .catch((err) => {
             console.error('[Zao Chat] Failed to initialize widget:', err);
         });
+    }
+
+    // Works whether the script is sync, async, or deferred by an optimizer
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();

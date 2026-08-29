@@ -169,6 +169,9 @@ PROMPT;
         $extractedName = $knownName !== '' ? $knownName : $this->extractName($visitorMessage);
         $extractedContact = $knownContact !== '' ? $knownContact : $this->extractContact($visitorMessage);
 
+        $expertName = trim((string) ($client->expert_name ?? ''));
+        $expertFollowup = trim((string) ($client->expert_followup ?? ''));
+
         if ($this->isRefusal($visitorMessage)) {
             return [
                 'name' => $extractedName,
@@ -184,7 +187,7 @@ PROMPT;
                 'name' => $extractedName,
                 'contact' => $extractedContact,
                 'next_step' => 'done',
-                'assistant_message' => $this->fallbackAssistantMessage($extractedName, 'done'),
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, 'done', $expertName, $expertFollowup),
                 'cancel_capture' => false,
             ];
         }
@@ -196,7 +199,7 @@ PROMPT;
                 'name' => $extractedName,
                 'contact' => $extractedContact,
                 'next_step' => $nextStep,
-                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep),
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep, $expertName, $expertFollowup),
                 'cancel_capture' => false,
             ];
         }
@@ -276,7 +279,7 @@ PROMPT;
             }
 
             if ($assistantMessage === '') {
-                $assistantMessage = $this->fallbackAssistantMessage($name, $nextStep);
+                $assistantMessage = $this->fallbackAssistantMessage($name, $nextStep, $expertName, $expertFollowup);
             }
 
             return [
@@ -293,7 +296,7 @@ PROMPT;
                 'name' => $extractedName,
                 'contact' => $extractedContact,
                 'next_step' => $nextStep,
-                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep),
+                'assistant_message' => $this->fallbackAssistantMessage($extractedName, $nextStep, $expertName, $expertFollowup),
                 'cancel_capture' => false,
             ];
         }
@@ -357,15 +360,19 @@ PROMPT;
         return 'ask_name';
     }
 
-    private function fallbackAssistantMessage(string $name, string $nextStep): string
+    private function fallbackAssistantMessage(string $name, string $nextStep, string $expertName = '', string $expertFollowup = ''): string
     {
+        $doneMessage = $expertFollowup !== ''
+            ? ($name !== '' ? "Thanks {$name}! {$expertFollowup}" : $expertFollowup)
+            : ($name !== ''
+                ? "Thanks {$name}! ".($expertName !== '' ? "{$expertName} will reach out to you shortly." : "We've got your contact details and someone will reach out shortly.")
+                : ($expertName !== '' ? "{$expertName} will reach out to you shortly." : "Thanks! We've got your contact details and someone will reach out shortly."));
+
         return match ($nextStep) {
             'ask_contact' => $name !== ''
                 ? "Thanks {$name}! What's the best phone number or email address to reach you?"
                 : "Thanks! What's the best phone number or email address to reach you?",
-            'done' => $name !== ''
-                ? "Thanks {$name}! We've got your contact details."
-                : "Thanks! We've got your contact details.",
+            'done' => $doneMessage,
             default => 'I want to make sure I get this right. What is your name?',
         };
     }

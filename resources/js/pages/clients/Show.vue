@@ -1089,11 +1089,12 @@ function badgeVariant(status: string): 'default' | 'secondary' | 'outline' {
                                         class="w-max min-w-full px-3 py-2.5 text-xs text-slate-100"
                                     ><code class="whitespace-nowrap">{{ embedSnippet }}</code></pre>
                                 </div>
-                                <p
-                                    class="mt-2 text-xs text-muted-foreground"
-                                >
+                                <p class="mt-2 text-xs text-muted-foreground">
                                     Need iframe instead of script embed? Use the
                                     dedicated Iframe Embed Builder below.
+                                </p>
+                                <p class="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                                    ⚠ Using a WordPress caching or optimization plugin (WP Rocket, LiteSpeed, Autoptimize, etc.)? Exclude this script URL from JS minification, combining, and deferral — otherwise the widget will not load.
                                 </p>
                             </div>
 

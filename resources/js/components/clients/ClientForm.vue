@@ -5,6 +5,7 @@ import {
     BrainCircuit,
     DatabaseZap,
     Globe,
+    MessageSquare,
     Package,
     Sparkles,
     X,
@@ -296,6 +297,137 @@ onUnmounted(() => {
                     </CardContent>
                 </Card>
 
+                <!-- ── Chatbot Setup Card ── -->
+                <Card class="gap-0 border-sidebar-border/70">
+                    <CardHeader class="border-b border-sidebar-border/70">
+                        <div class="flex items-start gap-3">
+                            <div class="rounded-2xl border border-sidebar-border/70 p-3">
+                                <MessageSquare class="size-5" />
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-semibold">Chatbot setup</h2>
+                                <p class="text-sm text-muted-foreground">
+                                    Everything the AI needs to behave correctly for this client — instructions, tone, questions, and follow-up info.
+                                </p>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="grid gap-6 pt-6 md:grid-cols-2">
+
+                        <!-- 1. Opening message -->
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="welcome_message_chatbot">Opening message</Label>
+                            <textarea
+                                id="welcome_message_chatbot"
+                                v-model="form.welcome_message"
+                                :class="textAreaClass"
+                                placeholder="Hi! 👋 I'm here to help you find the right solution. What brings you in today?"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                First message the visitor sees when they open the chat.
+                            </p>
+                            <InputError :message="form.errors.welcome_message" />
+                        </div>
+
+                        <!-- 2. Instructions -->
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="system_prompt">Instructions</Label>
+                            <textarea
+                                id="system_prompt"
+                                v-model="form.system_prompt"
+                                :class="textAreaClass"
+                                placeholder="Write the exact instructions for this chatbot. Example: You are a friendly assistant for Acme Plumbing. Only answer questions about plumbing services, pricing, and bookings. Do not discuss competitors."
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                The exact behaviour you want — what to help with, what to avoid, what value to offer in exchange for contact info.
+                            </p>
+                            <InputError :message="form.errors.system_prompt" />
+                        </div>
+
+                        <!-- 3. Engagement questions -->
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="engagement_questions">Engagement / discovery questions</Label>
+                            <textarea
+                                id="engagement_questions"
+                                v-model="form.engagement_questions"
+                                :class="textAreaClass"
+                                placeholder="What's your biggest challenge right now?&#10;Are you looking to [achieve X]?&#10;What's most important to you when it comes to [topic]?"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                One question per line. The bot uses these naturally to understand what the visitor needs.
+                            </p>
+                            <InputError :message="form.errors.engagement_questions" />
+                        </div>
+
+                        <!-- 7. Tone & personality -->
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="chatbot_tone">Tone &amp; personality</Label>
+                            <Input
+                                id="chatbot_tone"
+                                v-model="form.chatbot_tone"
+                                placeholder="Helpful, friendly advisor. Knowledgeable but not salesy. Conversational tone. Act like you genuinely want to help."
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                How the bot should sound — e.g. "Professional and concise" or "Warm and conversational, never pushy".
+                            </p>
+                            <InputError :message="form.errors.chatbot_tone" />
+                        </div>
+
+                        <!-- 4+5+6. Lead capture -->
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label class="text-sm">Lead capture</Label>
+                            <label class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm">
+                                <input
+                                    v-model="form.lead_capture_enabled"
+                                    type="checkbox"
+                                    class="size-4 rounded border-input"
+                                />
+                                Collect visitor name, phone, and email naturally during the conversation.
+                            </label>
+                            <p class="text-xs text-muted-foreground">
+                                When on, the bot acts as a lead qualifier — it asks for contact info, saves it as a lead, and tells the visitor who will follow up.
+                            </p>
+                            <InputError :message="form.errors.lead_capture_enabled" />
+                        </div>
+
+                        <!-- 8. Expert / follow-up info -->
+                        <div class="grid gap-2">
+                            <Label for="expert_name">Expert name</Label>
+                            <Input
+                                id="expert_name"
+                                v-model="form.expert_name"
+                                placeholder="John Smith"
+                            />
+                            <p class="text-xs text-muted-foreground">Who will follow up with the visitor.</p>
+                            <InputError :message="form.errors.expert_name" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="expert_title">Expert title</Label>
+                            <Input
+                                id="expert_title"
+                                v-model="form.expert_title"
+                                placeholder="Senior Consultant"
+                            />
+                            <InputError :message="form.errors.expert_title" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="expert_followup">Follow-up message</Label>
+                            <Input
+                                id="expert_followup"
+                                v-model="form.expert_followup"
+                                placeholder="John will reach out within 24 hours with personalized recommendations."
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Shown to the visitor after their contact info is captured.
+                            </p>
+                            <InputError :message="form.errors.expert_followup" />
+                        </div>
+
+                    </CardContent>
+                </Card>
+
                 <Card class="gap-0 border-sidebar-border/70">
                     <CardHeader class="border-b border-sidebar-border/70">
                         <div class="flex items-start gap-3">
@@ -533,94 +665,6 @@ onUnmounted(() => {
                             />
                         </div>
 
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label for="system_prompt">Instructions</Label>
-                            <textarea
-                                id="system_prompt"
-                                v-model="form.system_prompt"
-                                :class="textAreaClass"
-                                placeholder="Write the exact instructions for this chatbot. Example: You are a friendly assistant for Acme Plumbing. Only answer questions about plumbing services, pricing, and bookings. Do not discuss competitors."
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                These are the exact instructions the AI will follow. Write them clearly — the AI will stick to whatever you put here.
-                            </p>
-                            <InputError :message="form.errors.system_prompt" />
-                        </div>
-
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label for="chatbot_tone">Tone &amp; personality</Label>
-                            <Input
-                                id="chatbot_tone"
-                                v-model="form.chatbot_tone"
-                                placeholder="Helpful, friendly advisor. Knowledgeable but not salesy. Conversational tone."
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                How the bot should sound — e.g. "Professional and concise" or "Warm and conversational".
-                            </p>
-                            <InputError :message="form.errors.chatbot_tone" />
-                        </div>
-
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label for="engagement_questions">Engagement / discovery questions</Label>
-                            <textarea
-                                id="engagement_questions"
-                                v-model="form.engagement_questions"
-                                :class="textAreaClass"
-                                placeholder="What's your biggest challenge right now?&#10;Are you looking to [achieve X]?&#10;What's most important to you when it comes to [topic]?"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                One question per line. The bot uses these to understand what the visitor needs.
-                            </p>
-                            <InputError :message="form.errors.engagement_questions" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="expert_name">Expert name</Label>
-                            <Input
-                                id="expert_name"
-                                v-model="form.expert_name"
-                                placeholder="John Smith"
-                            />
-                            <InputError :message="form.errors.expert_name" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="expert_title">Expert title</Label>
-                            <Input
-                                id="expert_title"
-                                v-model="form.expert_title"
-                                placeholder="Senior Consultant"
-                            />
-                            <InputError :message="form.errors.expert_title" />
-                        </div>
-
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label for="expert_followup">Follow-up message</Label>
-                            <Input
-                                id="expert_followup"
-                                v-model="form.expert_followup"
-                                placeholder="John will reach out within 24 hours with personalized recommendations."
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Shown to the visitor after their contact info is captured.
-                            </p>
-                            <InputError :message="form.errors.expert_followup" />
-                        </div>
-
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label class="text-sm">Lead capture</Label>
-                            <label
-                                class="flex min-h-10 items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
-                            >
-                                <input
-                                    v-model="form.lead_capture_enabled"
-                                    type="checkbox"
-                                    class="size-4 rounded border-input"
-                                />
-                                Collect visitor name, phone, and email during the conversation.
-                            </label>
-                            <InputError :message="form.errors.lead_capture_enabled" />
-                        </div>
 
                         <div class="grid gap-2 md:col-span-2">
                             <Label for="allowed_domains">Allowed domains</Label>
@@ -811,19 +855,6 @@ onUnmounted(() => {
                                 class="h-12"
                             />
                             <InputError :message="form.errors.accent_color" />
-                        </div>
-
-                        <div class="grid gap-2 md:col-span-2">
-                            <Label for="welcome_message">Welcome message</Label>
-                            <textarea
-                                id="welcome_message"
-                                v-model="form.welcome_message"
-                                :class="textAreaClass"
-                                placeholder="Ask us about pricing, hours, support, and service details."
-                            />
-                            <InputError
-                                :message="form.errors.welcome_message"
-                            />
                         </div>
 
                         <div class="grid gap-2 md:col-span-2">

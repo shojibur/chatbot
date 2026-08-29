@@ -273,20 +273,29 @@ const avatarFallback = computed(() =>
         .toUpperCase(),
 );
 
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth <= 640);
+function onResize() { isMobile.value = window.innerWidth <= 640; }
+
 const positionStyle = computed(() => {
     const pos = props.config.widget_settings?.position || 'right';
 
+    if (isMobile.value) {
+        // On mobile, pin panel to the bottom and stretch to screen width with small margin
+        return pos === 'left'
+            ? { left: '12px', right: '12px', bottom: '16px' }
+            : { right: '12px', left: '12px', bottom: '16px' };
+    }
+
     return pos === 'left'
-        ? { left: '20px', right: 'auto' }
-        : { right: '20px', left: 'auto' };
+        ? { left: '20px', right: 'auto', bottom: '20px' }
+        : { right: '20px', left: 'auto', bottom: '20px' };
 });
 
-const expandedStyle = computed(() => ({
-    top: '32px',
-    right: '32px',
-    bottom: '32px',
-    left: '32px',
-}));
+const expandedStyle = computed(() => (
+    isMobile.value
+        ? { top: '0', right: '0', bottom: '0', left: '0' }
+        : { top: '32px', right: '32px', bottom: '32px', left: '32px' }
+));
 
 const widgetStyle = computed(() => (
     isOpen.value && isExpanded.value
@@ -411,6 +420,8 @@ function startPolling() {
 }
 
 onMounted(() => {
+    window.addEventListener('resize', onResize);
+
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
         darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
         if (typeof darkModeMedia.addEventListener === 'function') {
@@ -435,6 +446,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    window.removeEventListener('resize', onResize);
+
     if (!darkModeMedia) {
         return;
     }

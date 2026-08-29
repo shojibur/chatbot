@@ -22,7 +22,8 @@ defineProps<{
                         :href="home()"
                         class="flex flex-col items-center gap-2 font-medium focus:outline-none"
                     >
-                        <img src="/logo.png" alt="Zao Chat" class="h-10 w-auto mb-2" />
+                        <img src="/logodark.png" alt="Zao Chat" class="h-10 w-auto mb-2 dark:hidden" />
+                        <img src="/logowhite.png" alt="Zao Chat" class="h-10 w-auto mb-2 hidden dark:block" />
 
                         <span class="sr-only">{{ title }}</span>
                     </Link>
