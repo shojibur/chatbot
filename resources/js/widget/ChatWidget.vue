@@ -236,10 +236,13 @@ const props = defineProps<{
 
 const expandedStorageKey = `davey_is_expanded_${props.clientCode}`;
 const isOpen = ref(sessionStorage.getItem('davey_is_open') === 'true');
+// Only use stored value if the user has manually toggled in this session.
+// Always fall back to the admin-configured default_expanded setting.
+const storedExpanded = sessionStorage.getItem(expandedStorageKey);
 const isExpanded = ref(
-    sessionStorage.getItem(expandedStorageKey) === null
-        ? props.config.widget_settings?.default_expanded !== false
-        : sessionStorage.getItem(expandedStorageKey) === 'true',
+    storedExpanded !== null
+        ? storedExpanded === 'true'
+        : props.config.widget_settings?.default_expanded === true,
 );
 const input = ref('');
 const loading = ref(false);
