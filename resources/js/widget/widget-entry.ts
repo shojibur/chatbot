@@ -42,6 +42,12 @@ import widgetStyles from './widget-styles.css?inline';
 
     const shadow = host.attachShadow({ mode: 'open' });
 
+    // Inject Google Font link — @import inside textContent is blocked by browsers in Shadow DOM
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap';
+    shadow.appendChild(fontLink);
+
     // Inject styles into Shadow DOM (not <head>)
     const styleEl = document.createElement('style');
     styleEl.textContent = widgetStyles;
