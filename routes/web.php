@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\KnowledgeSourceController;
@@ -60,6 +61,10 @@ Route::middleware(['auth', 'verified', EnsureUserIsAdmin::class])->group(functio
     Route::delete('leads/{lead}', [LeadController::class, 'destroy'])->name('leads.destroy');
 
     Route::resource('users', UserController::class);
+
+    Route::get('backups', [BackupController::class, 'index'])->name('backups.index');
+    Route::post('backups/run', [BackupController::class, 'run'])->name('backups.run');
+    Route::delete('backups/{filename}', [BackupController::class, 'destroy'])->name('backups.destroy');
 });
 
 Route::middleware(['auth', 'verified', \App\Http\Middleware\EnsureUserIsClient::class])->prefix('portal')->name('portal.')->group(function () {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { Bot, Building2, CreditCard, FileText, History, LayoutDashboard, Radio, Settings, User as UserIcon } from 'lucide-vue-next';
+import { Bot, Building2, CreditCard, DatabaseBackup, FileText, History, LayoutDashboard, Radio, Settings, User as UserIcon } from 'lucide-vue-next';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -45,6 +45,11 @@ const mainNavItems = computed((): NavItem[] => {
                 title: 'Plans',
                 href: '/plans',
                 icon: CreditCard,
+            },
+            {
+                title: 'Backups',
+                href: '/backups',
+                icon: DatabaseBackup,
             },
         ];
     }

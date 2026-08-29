@@ -10,6 +10,11 @@ Artisan::command('inspire', function () {
 
 Schedule::command('chat:prune')->daily()->at('03:00');
 
+// Daily DB backup at 02:00
+Schedule::command('backup:run --only-db')->daily()->at('02:00');
+// Daily cleanup — removes backups older than 7 days
+Schedule::command('backup:clean')->daily()->at('01:00');
+
 Schedule::call(function () {
     \App\Models\Client::onlyTrashed()
         ->where('deleted_at', '<=', now()->subDays(7))
