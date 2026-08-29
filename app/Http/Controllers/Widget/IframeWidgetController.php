@@ -54,7 +54,11 @@ class IframeWidgetController extends Controller
     {
         $domains = collect($client->allowed_domains ?? [])
             ->filter(fn ($domain): bool => is_string($domain) && trim($domain) !== '')
-            ->map(fn (string $domain): string => strtolower(trim($domain)))
+            // Strip ALL whitespace including newlines — a domain must be a single token
+            ->map(fn (string $domain): string => strtolower(preg_replace('/\s+/', '', $domain) ?? ''))
+            ->filter(fn (string $domain): bool => $domain !== '')
+            // Only allow valid hostname characters to prevent CSP injection
+            ->filter(fn (string $domain): bool => (bool) preg_match('/^[\*\.a-z0-9\-]+$/', $domain))
             ->unique()
             ->values();
 
@@ -66,6 +70,7 @@ class IframeWidgetController extends Controller
 
         foreach ($domains as $domain) {
             $normalizedDomain = ltrim($domain, '.');
+
             if ($normalizedDomain === '') {
                 continue;
             }

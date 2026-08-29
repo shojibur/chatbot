@@ -451,8 +451,9 @@ function scrollToBottom() {
 .davey-iframe-widget {
     width: 100%;
     height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
         Arial, sans-serif;
+    font-size: 17px;
     color: #111827;
     background: #ffffff;
 }
