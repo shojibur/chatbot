@@ -282,16 +282,17 @@ function onResize() { isMobile.value = window.innerWidth <= 640; }
 const positionStyle = computed(() => {
     const pos = props.config.widget_settings?.position || 'right';
 
-    if (isMobile.value) {
-        // On mobile, pin panel to the bottom and stretch to screen width with small margin
-        return pos === 'left'
-            ? { left: '12px', right: '12px', bottom: '16px' }
-            : { right: '12px', left: '12px', bottom: '16px' };
-    }
-
     return pos === 'left'
         ? { left: '20px', right: 'auto', bottom: '20px' }
         : { right: '20px', left: 'auto', bottom: '20px' };
+});
+
+// On mobile, open panel stretches edge-to-edge from the bottom
+const mobilePanelStyle = computed(() => {
+    const pos = props.config.widget_settings?.position || 'right';
+    return pos === 'left'
+        ? { left: '12px', right: '12px', bottom: '16px' }
+        : { right: '12px', left: '12px', bottom: '16px' };
 });
 
 const expandedStyle = computed(() => (
@@ -300,11 +301,11 @@ const expandedStyle = computed(() => (
         : { top: '32px', right: '32px', bottom: '32px', left: '32px' }
 ));
 
-const widgetStyle = computed(() => (
-    isOpen.value && isExpanded.value
-        ? expandedStyle.value
-        : positionStyle.value
-));
+const widgetStyle = computed(() => {
+    if (isOpen.value && isExpanded.value) return expandedStyle.value;
+    if (isOpen.value && isMobile.value) return mobilePanelStyle.value;
+    return positionStyle.value;
+});
 
 const inputPlaceholder = computed(() => 'Type a message…');
 
