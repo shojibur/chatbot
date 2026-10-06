@@ -210,6 +210,9 @@ onUnmounted(() => {
                                 type="email"
                                 placeholder="owner@client.test"
                             />
+                            <p class="text-xs text-muted-foreground">
+                                Required when lead capture is enabled — new lead alerts are sent here.
+                            </p>
                             <InputError :message="form.errors.contact_email" />
                         </div>
 

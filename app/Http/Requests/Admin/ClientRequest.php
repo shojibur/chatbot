@@ -31,7 +31,12 @@ abstract class ClientRequest extends FormRequest
         return [
             'plan_id' => ['required', Rule::exists(Plan::class, 'id')],
             'name' => ['required', 'string', 'max:255'],
-            'contact_email' => ['nullable', 'email:rfc', 'max:255'],
+            'contact_email' => [
+                Rule::requiredIf(fn () => (bool) $this->boolean('lead_capture_enabled')),
+                'nullable',
+                'email:rfc',
+                'max:255',
+            ],
             'lead_capture_enabled' => ['required', 'boolean'],
             'lead_sms_enabled' => ['required', 'boolean'],
             'lead_sms_to' => [
@@ -71,6 +76,16 @@ abstract class ClientRequest extends FormRequest
             'avatar' => ['nullable', 'image', 'max:2048'],
             'remove_avatar' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'contact_email.required' => 'A contact email is required when lead capture is enabled — this is where lead notifications are sent.',
         ];
     }
 }
