@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use PhpOffice\PhpWord\IOFactory as WordIOFactory;
+use Smalot\PdfParser\Parser as PdfParser;
 use Spatie\PdfToText\Pdf;
 
 class ContentExtractorService
@@ -13,12 +15,49 @@ class ContentExtractorService
 
     /**
      * Extract plain text from a PDF file.
+     * Tries pdftotext binary first; falls back to pure-PHP smalot/pdfparser
+     * when the binary is not installed on the server.
      */
     public function extractFromPdf(string $path): string
     {
-        $text = Pdf::getText($path);
+        try {
+            $text = Pdf::getText($path);
+
+            return $this->chunkingService->normalizeText($text);
+        } catch (\Throwable) {
+            // Binary not available — fall back to pure-PHP parser.
+        }
+
+        $parser = new PdfParser();
+        $text   = $parser->parseFile($path)->getText();
 
         return $this->chunkingService->normalizeText($text);
+    }
+
+    /**
+     * Extract plain text from a Word document (.doc / .docx).
+     */
+    public function extractFromWord(string $path): string
+    {
+        $phpWord  = WordIOFactory::load($path);
+        $sections = $phpWord->getSections();
+        $lines    = [];
+
+        foreach ($sections as $section) {
+            foreach ($section->getElements() as $element) {
+                if (method_exists($element, 'getText')) {
+                    $lines[] = $element->getText();
+                } elseif (method_exists($element, 'getElements')) {
+                    foreach ($element->getElements() as $child) {
+                        if (method_exists($child, 'getText')) {
+                            $lines[] = $child->getText();
+                        }
+                    }
+                }
+            }
+        }
+
+        return $this->chunkingService->normalizeText(implode("\n", $lines));
     }
 
     /**
@@ -97,6 +136,7 @@ class ContentExtractorService
         return match (true) {
             str_contains($mime, 'pdf') => $this->extractFromPdf($path),
             str_starts_with($mime, 'text/') => $this->chunkingService->normalizeText(file_get_contents($path) ?: ''),
+            str_contains($mime, 'wordprocessingml') || str_contains($mime, 'msword') => $this->extractFromWord($path),
             default => throw new \RuntimeException("Unsupported file type: {$mime}"),
         };
     }
